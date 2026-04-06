@@ -159,7 +159,7 @@ if [ -z "$SD_DEVICE" ]; then
     error "No device specified."
 fi
 
-if [[ "$SD_DEVICE" == *"s"* ]]; then
+if [[ "$SD_DEVICE" =~ s[0-9]+$ ]]; then
     error "You specified a partition (${SD_DEVICE}). Use the whole disk (e.g. /dev/disk4)."
 fi
 
