@@ -209,21 +209,40 @@ cat > "$FIRSTRUN_SCRIPT" << FIRSTRUN
 #!/bin/bash
 # First-run hardening script — injected by flash-jumphost.sh
 # Runs once on first boot as root, then deletes itself
+# Logs to /var/log/firstrun.log AND /boot/firmware/firstrun-debug.log (readable from Mac)
 
-set -e
-LOG="/var/log/firstrun.log"
-exec > >(tee -a \$LOG) 2>&1
-echo "=== First-run hardening started: \$(date) ==="
+# Enable verbose logging for debugging
+set -x
 
-# Update system
+# Dual logging — both to system log and to boot partition (readable from Mac without booting)
+SYSLOG="/var/log/firstrun.log"
+BOOTLOG="/boot/firmware/firstrun-debug.log"
+STATUSFILE="/boot/firmware/firstrun-status.txt"
+
+log_step() {
+    echo "[\$(date '+%H:%M:%S')] STEP: \$1" | tee -a "\$SYSLOG" "\$BOOTLOG"
+    echo "STEP: \$1 [\$(date)]" > "\$STATUSFILE"
+}
+
+exec > >(tee -a "\$SYSLOG" "\$BOOTLOG") 2>&1
+echo "STARTED [\$(date)]" > "\$STATUSFILE"
+echo "=== First-run hardening started: \$(date) ===" | tee "\$BOOTLOG"
+
+log_step "apt-get update"
 apt-get update -y
+
+log_step "apt-get upgrade"
 apt-get upgrade -y
+
+log_step "install packages"
 apt-get install -y ufw fail2ban curl wget
 
 # Set timezone
+log_step "set timezone"
 timedatectl set-timezone ${TIMEZONE}
 
 # Install SSH public key for Mac → Pi access
+log_step "install SSH public key"
 mkdir -p /home/${PI_USER}/.ssh
 chmod 700 /home/${PI_USER}/.ssh
 echo "${MAC_PUBKEY}" >> /home/${PI_USER}/.ssh/authorized_keys
@@ -231,6 +250,7 @@ chmod 600 /home/${PI_USER}/.ssh/authorized_keys
 chown -R ${PI_USER}:${PI_USER} /home/${PI_USER}/.ssh
 
 # Harden SSH daemon
+log_step "harden SSH daemon"
 cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
 sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
 sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
@@ -238,12 +258,14 @@ sed -i 's/^#*KbdInteractiveAuthentication.*/KbdInteractiveAuthentication no/' /e
 grep -q "^AllowUsers" /etc/ssh/sshd_config || echo "AllowUsers ${PI_USER}" >> /etc/ssh/sshd_config
 
 # Configure UFW — allow SSH on local network
+log_step "configure UFW"
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp comment 'SSH local network only'
 ufw --force enable
 
 # Configure fail2ban
+log_step "configure fail2ban"
 cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
 cat > /etc/fail2ban/jail.d/sshd.local << 'EOF'
 [sshd]
@@ -258,6 +280,7 @@ systemctl enable fail2ban
 systemctl start fail2ban
 
 # Create scripts directory and watchdog
+log_step "create watchdog script"
 mkdir -p /home/${PI_USER}/scripts
 
 cat > /home/${PI_USER}/scripts/node-watchdog.sh << 'WATCHDOG'
@@ -307,7 +330,7 @@ chown -R ${PI_USER}:${PI_USER} /home/${PI_USER}/scripts
   echo "*/15 * * * * /home/${PI_USER}/scripts/node-watchdog.sh >> /home/${PI_USER}/scripts/watchdog.log 2>&1") \
   | crontab -u ${PI_USER} -
 
-# Configure SSH client for node access
+log_step "configure SSH client"
 mkdir -p /home/${PI_USER}/.ssh
 cat >> /home/${PI_USER}/.ssh/config << EOF
 Host ${NODE_HOSTNAME}
@@ -320,12 +343,16 @@ EOF
 chmod 600 /home/${PI_USER}/.ssh/config
 chown ${PI_USER}:${PI_USER} /home/${PI_USER}/.ssh/config
 
-echo "=== First-run hardening complete: \$(date) ==="
+log_step "complete"
+echo "=== First-run hardening complete: \$(date) ===" | tee -a "\$BOOTLOG"
+echo "COMPLETE [\$(date)]" > "\$STATUSFILE"
 echo "NOTE: Generate the node SSH key manually after first login:"
 echo "  ssh-keygen -t ed25519 -C 'rp-node01-access' -f ~/.ssh/rp_node_key"
 
-# Self-destruct
+# Reboot to apply all changes (SSH hardening, UFW, etc.)
+# Self-destruct first, then reboot
 rm -f "\$0"
+reboot
 FIRSTRUN
 
 chmod +x "$FIRSTRUN_SCRIPT"
@@ -498,7 +525,7 @@ if [ -z "$BOOT_MOUNT_PATH" ] || [ ! -d "$BOOT_MOUNT_PATH" ]; then
     warn "  2. Create userconf.txt with: echo '${PI_USER}:\$(openssl passwd -6 ${PI_PASSWORD})' > /Volumes/bootfs/userconf.txt"
     warn "  3. Create empty ssh file: touch /Volumes/bootfs/ssh"
     warn "  4. Copy firstrun.sh: cp $FIRSTRUN_SCRIPT /Volumes/bootfs/firstrun.sh"
-    warn "  5. Add to cmdline.txt: append 'systemd.run=/boot/firmware/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target' before 'rootwait'"
+    warn "  5. Add to cmdline.txt: append 'systemd.run=/boot/firmware/firstrun.sh' to the end of the single line"
 else
     info "Injecting configuration into $BOOT_MOUNT_PATH..."
 
@@ -519,10 +546,26 @@ else
     # 4. cmdline.txt — add systemd.run to execute firstrun.sh on boot
     CMDLINE="$BOOT_MOUNT_PATH/cmdline.txt"
     if [ -f "$CMDLINE" ]; then
-        # Add firstrun.sh execution before 'rootwait' if not already present
+        # Back up original cmdline.txt
+        sudo cp "$CMDLINE" "$CMDLINE.bak"
+        ORIGINAL_CMDLINE=$(cat "$CMDLINE")
+
         if ! grep -q "firstrun.sh" "$CMDLINE"; then
-            sudo sed -i '' 's|rootwait|systemd.run=/boot/firmware/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target rootwait|' "$CMDLINE"
-            success "cmdline.txt updated (firstrun.sh will execute on boot)"
+            # Read current content, append systemd.run parameter
+            # Use a safe approach: append to end of line rather than inserting before rootwait
+            CURRENT=$(cat "$CMDLINE" | tr -d '\n')
+            NEW_CMDLINE="${CURRENT} systemd.run=/boot/firmware/firstrun.sh"
+            echo "$NEW_CMDLINE" | sudo tee "$CMDLINE" > /dev/null
+
+            # Validate — confirm the file still has rootwait and our addition
+            if grep -q "rootwait" "$CMDLINE" && grep -q "firstrun.sh" "$CMDLINE"; then
+                success "cmdline.txt updated and validated"
+            else
+                warn "cmdline.txt validation failed — restoring backup"
+                sudo cp "$CMDLINE.bak" "$CMDLINE"
+                warn "firstrun.sh will NOT run automatically on first boot"
+                warn "Pi will still boot correctly — hardening must be done manually"
+            fi
         else
             info "cmdline.txt already references firstrun.sh — skipping"
         fi
