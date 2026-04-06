@@ -94,12 +94,14 @@ DEFAULT_HOSTNAME="pi-jumphost"
 ask "Pi hostname [default: ${DEFAULT_HOSTNAME}]:"
 read -r INPUT_HOSTNAME
 HOSTNAME="${INPUT_HOSTNAME:-$DEFAULT_HOSTNAME}"
+echo "  → $HOSTNAME"
 
 # --- Username ---
 DEFAULT_USERNAME="piop"
 ask "Pi username [default: ${DEFAULT_USERNAME}]:"
 read -r INPUT_USERNAME
 PI_USER="${INPUT_USERNAME:-$DEFAULT_USERNAME}"
+echo "  → $PI_USER"
 
 # --- Password ---
 ask "Pi password (used only until SSH keys are set up):"
@@ -108,12 +110,20 @@ echo ""
 if [ -z "$PI_PASSWORD" ]; then
     error "Password cannot be empty."
 fi
+ask "Confirm password:"
+read -rs PI_PASSWORD_CONFIRM
+echo ""
+if [ "$PI_PASSWORD" != "$PI_PASSWORD_CONFIRM" ]; then
+    error "Passwords do not match. Run the script again."
+fi
+echo "  → [password set]"
 
 # --- Timezone ---
 DEFAULT_TZ="UTC"
 ask "Timezone [default: ${DEFAULT_TZ}]:"
 read -r INPUT_TZ
 TIMEZONE="${INPUT_TZ:-$DEFAULT_TZ}"
+echo "  → $TIMEZONE"
 
 # --- Pi static IP (optional — skip if no final router yet) ---
 echo ""
@@ -121,16 +131,19 @@ info "Static IPs are optional. Press Enter to skip and use .local hostnames inst
 ask "Pi static IP for DHCP reservation (or press Enter to skip):"
 read -r INPUT_PI_IP
 PI_IP="${INPUT_PI_IP:-}"
+echo "  → ${PI_IP:-[not set — using ${HOSTNAME}.local]}"
 
 # --- Node hostname ---
 DEFAULT_NODE_HOSTNAME="rp-node01"
 ask "Node (Beelink) hostname [default: ${DEFAULT_NODE_HOSTNAME}]:"
 read -r INPUT_NODE_HOSTNAME
 NODE_HOSTNAME="${INPUT_NODE_HOSTNAME:-$DEFAULT_NODE_HOSTNAME}"
+echo "  → $NODE_HOSTNAME"
 
 ask "Node (Beelink) static IP for DHCP reservation (or press Enter to skip):"
 read -r INPUT_NODE_IP
 NODE_IP="${INPUT_NODE_IP:-}"
+echo "  → ${NODE_IP:-[not set — using ${NODE_HOSTNAME}.local]}"
 
 # Determine hostnames to use in SSH config
 PI_HOST="${PI_IP:-${HOSTNAME}.local}"
@@ -139,6 +152,7 @@ NODE_HOST="${NODE_IP:-${NODE_HOSTNAME}.local}"
 # --- Discord webhook (optional) ---
 ask "Discord webhook URL for watchdog alerts (press Enter to skip):"
 read -r WEBHOOK_URL
+echo "  → ${WEBHOOK_URL:-[not set]}"
 
 # =============================================================================
 # STEP 3: SSH key — generate if needed
