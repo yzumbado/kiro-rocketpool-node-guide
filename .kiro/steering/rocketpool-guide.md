@@ -197,3 +197,12 @@ Terminal-comfortable but not necessarily a Linux expert. The guide should also b
 - All hostnames use `.local` mDNS — do not substitute IPs unless the operator confirms static IPs have been configured
 - `brew install rpi-imager` does NOT work — correct command is `brew install --cask raspberry-pi-imager`
 - Static IPs and subnet-restricted UFW are tracked in `10-pending-improvements.md` — do not treat them as current config
+
+## Steering Files in This Project
+
+| File | Purpose | Inclusion |
+|---|---|---|
+| `rocketpool-guide.md` | Full project context — hardware, decisions, file structure, technical rationale | Always |
+| `session-state.md` | Current phase progress, setup values, blockers, session log | Always |
+| `onboarding.md` | How to open every session — greeting templates based on state | Always |
+| `persona.md` | How Kiro presents itself — tone, behavior, what to proactively surface | Always |
