@@ -224,3 +224,58 @@ gpg --symmetric /tmp/rp-backup-$(date +%Y%m%d).tar.gz
 | 7. Backup strategy | ⬜ | |
 
 *Status: ⬜ not started · 🔄 in progress · ✅ complete*
+
+---
+
+## 8. flash-jumphost.sh — Known Issues Backlog
+**Priority:** Medium — fix before next major release
+**Effort:** 1–2 hours total
+
+Issues identified during deep code review. Listed in priority order.
+
+### C1 — Empty MAC_PUBKEY not validated
+If `~/.ssh/id_ed25519_<hostname>.pub` is empty or unreadable, the SSH key injection silently writes a blank line to `authorized_keys`. SSH key login will fail with no clear error.
+**Fix:** Add before the heredoc: `[ -z "$MAC_PUBKEY" ] && error "SSH public key is empty — cannot continue"`
+
+### C3 — HOSTNAME variable collision
+`HOSTNAME` is a reserved bash environment variable. Setting it to the Pi hostname can cause unexpected behavior on some systems.
+**Fix:** Rename to `PI_HOSTNAME` throughout the Mac-side script.
+
+### C4 — /boot vs /boot/firmware path assumption
+`cmdline.txt` gets `systemd.run=/boot/firmware/firstrun.sh` but on Pi 2 with older firmware the boot path may be `/boot` not `/boot/firmware`.
+**Fix:** Add `/boot/firstrun.sh` as a fallback path in cmdline.txt, or detect the correct path from the mounted partition.
+
+### M2 — dd exit code not checked
+`pv ... | sudo dd of="$RAW_DEVICE"` — if dd fails, the error is swallowed by the pipe.
+**Fix:** Add `|| error "Flash failed — check device and permissions"` after the pipe.
+
+### M3 — sleep 2 fragile mount wait
+Fixed `sleep 2` after `diskutil mountDisk` may not be enough on slow systems.
+**Fix:** Poll for mount point: `for i in $(seq 1 10); do [ -d "/Volumes/bootfs" ] && break; sleep 1; done`
+
+### M4 — Dead variable
+`ORIGINAL_CMDLINE=$(cat "$CMDLINE")` is assigned but never used.
+**Fix:** Remove the line.
+
+### M5 — apt-get upgrade can hang
+No `DEBIAN_FRONTEND=noninteractive` set — interactive package prompts can stall the script indefinitely.
+**Fix:** Add `export DEBIAN_FRONTEND=noninteractive` before all apt calls in firstrun.sh.
+
+### M6 — SSH config appended on re-run
+`cat >> ~/.ssh/config` appends on every run. If firstrun.sh runs twice, duplicate entries appear.
+**Fix:** Check `grep -q "Host ${NODE_HOSTNAME}" ~/.ssh/config 2>/dev/null` before appending.
+
+### m1 — Duplicate STEP 9 comment
+Two `# STEP 9` headers in flash-jumphost.sh. Cosmetic.
+
+### m2 — rpi-imager dependency check is now unused
+The script uses `dd` directly. The rpi-imager check is dead code.
+**Fix:** Remove the rpi-imager dependency check, or repurpose it.
+
+### m3 — Write-protect check fragile
+`diskutil info` output format could change. `awk '{print $NF}'` may return wrong value.
+**Fix:** Use `grep -c "Media Read-Only:.*Yes"` instead.
+
+### m4 — No minimum SD card size check
+Image is ~1.9GB decompressed. A 1GB card fails mid-write with a cryptic error.
+**Fix:** Check `SD_SIZE_BYTES` against minimum before flashing.

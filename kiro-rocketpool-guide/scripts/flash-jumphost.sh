@@ -313,7 +313,7 @@ systemctl start fail2ban 2>/dev/null || true
 log_step "create watchdog script"
 mkdir -p /home/${PI_USER}/scripts
 
-cat > /home/${PI_USER}/scripts/node-watchdog.sh << 'WATCHDOG'
+cat > /home/${PI_USER}/scripts/node-watchdog.sh << WATCHDOG
 #!/bin/bash
 NODE_HOST="${NODE_HOSTNAME}"
 WEBHOOK_URL="${WEBHOOK_URL}"
@@ -322,20 +322,20 @@ ALERT_FILE="/tmp/watchdog_last_alert"
 ISSUES=()
 
 if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "\$NODE_HOST" exit 2>/dev/null; then
-    ISSUES+=("🔴 Node SSH unreachable")
+    ISSUES+=("Node SSH unreachable")
 fi
 
 if [ \${#ISSUES[@]} -eq 0 ]; then
     CONTAINER_COUNT=\$(ssh "\$NODE_HOST" "docker ps | grep -c rocketpool" 2>/dev/null)
     if [ "\${CONTAINER_COUNT:-0}" -lt 5 ]; then
-        ISSUES+=("⚠️ Only \$CONTAINER_COUNT/5+ Rocket Pool containers running")
+        ISSUES+=("Only \$CONTAINER_COUNT/5+ Rocket Pool containers running")
     fi
 fi
 
 if [ \${#ISSUES[@]} -eq 0 ]; then
     DISK_USED=\$(ssh "\$NODE_HOST" "df /mnt/ssd | awk 'NR==2{print \\\$5}' | tr -d '%'" 2>/dev/null)
     if [ "\${DISK_USED:-0}" -gt 85 ]; then
-        ISSUES+=("⚠️ Node disk at \${DISK_USED}% — action needed")
+        ISSUES+=("Node disk at \${DISK_USED}% — action needed")
     fi
 fi
 
@@ -343,7 +343,7 @@ if [ \${#ISSUES[@]} -gt 0 ] && [ -n "\$WEBHOOK_URL" ]; then
     LAST_ALERT=\$(cat "\$ALERT_FILE" 2>/dev/null || echo 0)
     NOW=\$(date +%s)
     if [ \$((NOW - LAST_ALERT)) -gt \$ALERT_COOLDOWN ]; then
-        MESSAGE="**rp-node01 Alert** \$(date)\n\$(printf '%s\n' "\${ISSUES[@]}")"
+        MESSAGE="rp-node01 Alert \$(date): \$(printf '%s ' "\${ISSUES[@]}")"
         curl -s -X POST "\$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "{\"content\": \"\$MESSAGE\"}" > /dev/null
@@ -559,7 +559,16 @@ else
     info "Injecting configuration into $BOOT_MOUNT_PATH..."
 
     # 1. userconf.txt — bypasses the interactive first-boot wizard
-    HASHED_PASSWORD=$(openssl passwd -6 "$PI_PASSWORD")
+    # openssl passwd -6 requires OpenSSL (not LibreSSL which ships with macOS)
+    # Try openssl first, fall back to Python if needed
+    if openssl passwd -6 "test" &>/dev/null 2>&1; then
+        HASHED_PASSWORD=$(openssl passwd -6 "$PI_PASSWORD")
+    else
+        HASHED_PASSWORD=$(python3 -c "import crypt; print(crypt.crypt('$PI_PASSWORD', crypt.mksalt(crypt.METHOD_SHA512)))" 2>/dev/null)
+    fi
+    if [ -z "$HASHED_PASSWORD" ]; then
+        error "Could not generate password hash. Install openssl: brew install openssl"
+    fi
     echo "${PI_USER}:${HASHED_PASSWORD}" | sudo tee "$BOOT_MOUNT_PATH/userconf.txt" > /dev/null
     success "userconf.txt written (bypasses setup wizard)"
 
