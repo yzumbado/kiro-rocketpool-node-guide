@@ -1,0 +1,29 @@
+# Personal operator notes — contains wallet addresses, validator keys, webhook URLs
+kiro-rocketpool-guide/yoel-notes.md
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Downloaded ISOs and firmware (large binary files)
+downloads/
+*.iso
+*.img
+*.img.xz
+*.deb
+
+# Temporary files
+*.tmp
+*.log
+/tmp/
+
+# Editor
+.vscode/
+*.swp
+*.swo
+
+# Rocket Pool documentation — scraped from their repo, not ours to redistribute
+# Reference: https://github.com/rocket-pool/docs.rocketpool.net
+docs.rocketpool.net/
+rocketpool_node_setup_combined.md
+sources.list
