@@ -113,7 +113,7 @@ read -r INPUT_NODE_IP
 NODE_IP="${INPUT_NODE_IP:-}"
 
 # Determine hostnames to use in SSH config
-PI_HOST="${PI_IP:-pi-jumphost.local}"
+PI_HOST="${PI_IP:-${HOSTNAME}.local}"
 NODE_HOST="${NODE_IP:-rp-node01.local}"
 
 # --- Discord webhook (optional) ---
@@ -312,7 +312,7 @@ echo "  Pi hostname:      $HOSTNAME"
 echo "  Pi username:      $PI_USER"
 echo "  Pi password:      [set]"
 echo "  Timezone:         $TIMEZONE"
-echo "  Pi static IP:     ${PI_IP:-[not set — using pi-jumphost.local]}"
+echo "  Pi static IP:     ${PI_IP:-[not set — using ${HOSTNAME}.local]}"
 echo "  Node host:        ${NODE_IP:-[not set — using rp-node01.local]}"
 echo "  SSH key (Mac→Pi): $JUMPHOST_PUB"
 echo "  Watchdog webhook: ${WEBHOOK_URL:-[not set]}"
