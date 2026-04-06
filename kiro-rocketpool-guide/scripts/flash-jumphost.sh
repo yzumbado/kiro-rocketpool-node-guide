@@ -373,13 +373,15 @@ echo ""
 info "Unmounting $SD_DEVICE before flash..."
 diskutil unmountDisk "$SD_DEVICE" || true
 
-info "Flashing $SD_DEVICE — this takes 3–8 minutes..."
+# Use raw disk device for faster write and to avoid macOS auto-mount interference
+RAW_DEVICE="${SD_DEVICE/disk/rdisk}"
+info "Flashing $RAW_DEVICE — this takes 3–8 minutes..."
 echo ""
 
 sudo "$RPI_IMAGER_CMD" --cli \
     --first-run-script "$FIRSTRUN_SCRIPT" \
     "$OS_IMAGE" \
-    "$SD_DEVICE"
+    "$RAW_DEVICE"
 
 # =============================================================================
 # STEP 9: Done
