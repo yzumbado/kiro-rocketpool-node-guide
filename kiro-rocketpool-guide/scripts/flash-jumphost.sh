@@ -23,6 +23,9 @@
 
 set -euo pipefail
 
+# Clean up any leftover temp files from previous runs
+rm -f /tmp/pi-firstrun-*.sh 2>/dev/null || true
+
 # --- Colors ---
 RED='\033[0;31m'
 GREEN='\033[0;32m'
