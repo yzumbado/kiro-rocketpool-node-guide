@@ -176,6 +176,17 @@ if ! diskutil info "$SD_DEVICE" &>/dev/null; then
     error "Device ${SD_DEVICE} not found."
 fi
 
+# Verify card is not write-protected before proceeding
+WRITE_PROTECTED=$(diskutil info "$SD_DEVICE" | grep "Media Read-Only" | awk '{print $NF}')
+if [ "$WRITE_PROTECTED" = "Yes" ]; then
+    error "The SD card at ${SD_DEVICE} is write-protected (Media Read-Only: Yes).
+    This can happen if:
+    - The card's physical lock switch is engaged (check the SD adapter)
+    - A previous failed write corrupted the card's controller
+    - The card is damaged or low quality
+    Try a different card. Recommended: Samsung PRO Endurance or SanDisk Endurance."
+fi
+
 SD_SIZE=$(diskutil info "$SD_DEVICE" | grep "Disk Size" | awk '{print $3, $4}')
 SD_NAME=$(diskutil info "$SD_DEVICE" | grep "Media Name" | cut -d: -f2 | xargs)
 
@@ -409,6 +420,16 @@ info "Unmounting $SD_DEVICE before flash..."
 diskutil unmountDisk "$SD_DEVICE" || true
 
 RAW_DEVICE="${SD_DEVICE/disk/rdisk}"
+
+# Disable macOS auto-mount to prevent it ejecting the card mid-write
+# A mid-write eject at 37% was the root cause of the previous card failure
+info "Disabling macOS auto-mount during flash (will re-enable after)..."
+sudo defaults write /Library/Preferences/SystemConfiguration/autodiskmount \
+    AutomountDisksWithoutUserApproval -bool false
+
+# Ensure card is still unmounted
+diskutil unmountDisk "$SD_DEVICE" 2>/dev/null || true
+
 info "Flashing $RAW_DEVICE using dd — this takes 3–8 minutes..."
 echo ""
 
@@ -420,10 +441,15 @@ if [ ! -f "$OS_IMG" ]; then
     success "Decompressed to $OS_IMG"
 fi
 
-# Write image with dd (bypasses macOS app sandbox restrictions)
+# Write image with dd
 sudo dd if="$OS_IMG" of="$RAW_DEVICE" bs=4m status=progress
 sync
 success "Image written"
+
+# Re-enable macOS auto-mount
+info "Re-enabling macOS auto-mount..."
+sudo defaults delete /Library/Preferences/SystemConfiguration/autodiskmount \
+    AutomountDisksWithoutUserApproval 2>/dev/null || true
 
 # Re-mount to inject first-run script
 info "Mounting boot partition to inject first-run script..."
