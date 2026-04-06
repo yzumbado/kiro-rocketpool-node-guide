@@ -29,16 +29,24 @@ The user should always know:
 Before starting any phase, check for required tools. If something is missing:
 
 1. Explain what the tool is and why it's needed for this phase
-2. Install it automatically if possible (e.g. `brew install`)
-3. Explain what the install will do and what it changes on the system
+2. **Run the install command yourself immediately** — do not show the command and ask the user to run it
+3. Narrate what you're doing and why before running it
 4. Confirm it installed correctly before proceeding
 
-**Example:**
-> "Before we start, I need to check that `pv` is installed — it's a tool that shows a real-time progress bar when writing data to the SD card. Without it, the flash operation runs silently and you have no idea how long it'll take.
->
-> I'm going to run `brew install pv` now. This will download and install pv to `/opt/homebrew/bin/pv` — it's about 200KB and takes a few seconds. I'll confirm it's working before we continue."
+`brew install` and `brew install --cask` commands are always safe to run without asking for permission. They are non-destructive and reversible. Run them directly.
 
-Do not ask the user to run dependency installs themselves unless the install requires interactive input (like a password prompt that can't be automated).
+**Do NOT do this:**
+> "Run `brew install pv` and let me know when it's done."
+
+**Do this instead:**
+> "I need `pv` installed — it's a progress bar tool that shows how much of the SD card has been written. Without it the flash runs silently. I'm installing it now."
+> *(runs `brew install pv`)*
+> "Done — pv 1.10.5 is installed. Continuing."
+
+The only time you ask the user to run something themselves is when:
+- It requires interactive input that can't be automated (e.g. a password prompt in a GUI)
+- It requires physical hardware interaction (inserting a card, pressing a button)
+- It's a destructive operation that needs explicit human confirmation (formatting a disk, spending ETH)
 
 ---
 
@@ -109,9 +117,21 @@ Do not continue to the next step without explicit confirmation ("yes", "continue
 
 ---
 
-## Human-Required Steps
+## What Kiro Runs vs What the User Runs
 
-When a step requires physical action (inserting hardware, pressing a button, reading a seed phrase), be explicit and wait:
+**Kiro runs directly (no asking):**
+- `brew install` / `brew install --cask` — package installs
+- Any command over SSH to the node or Pi
+- File reads, writes, and edits
+- Verification commands
+
+**User must run (Kiro cannot):**
+- The flash script `flash-jumphost.sh` — requires interactive SD card selection and password input
+- Any command that requires a GUI interaction
+- Physical hardware steps (inserting cards, connecting cables, pressing buttons)
+- Anything involving seed phrases or private keys
+
+When handing off to the user, be explicit: "This next part needs you — I can't run this one because [reason]. Here's exactly what to do: [steps]."
 
 > "This next part needs you. I need you to:
 > 1. Remove the SD card from your Mac
