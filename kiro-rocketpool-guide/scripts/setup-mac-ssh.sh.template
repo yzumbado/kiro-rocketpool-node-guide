@@ -113,8 +113,8 @@ while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
     SECS=$((ELAPSED % 60))
     TIMESTAMP=$(printf "%d:%02d" $MINS $SECS)
 
-    # Run ping with short timeout
-    PING_RESULT=$(ping -c 1 -W 2 "$PI_HOST" 2>/dev/null)
+    # Run ping — use || true to prevent set -e from killing the script on no response
+    PING_RESULT=$(ping -c 1 -W 2 "$PI_HOST" 2>/dev/null) || true
     if echo "$PING_RESULT" | grep -q "1 packets received\|1 received"; then
         # Extract IP from ping output
         RESOLVED_IP=$(echo "$PING_RESULT" | grep "PING" | grep -oE '\(([0-9.]+)\)' | tr -d '()')
