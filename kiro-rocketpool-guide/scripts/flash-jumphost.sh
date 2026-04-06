@@ -354,16 +354,48 @@ fi
 # STEP 7: Download OS image
 # =============================================================================
 echo ""
-info "Downloading Raspberry Pi OS Lite (32-bit)..."
+info "Checking Raspberry Pi OS Lite (32-bit) image..."
 
 OS_URL="https://downloads.raspberrypi.com/raspios_lite_armhf/images/raspios_lite_armhf-2025-05-13/2025-05-13-raspios-bookworm-armhf-lite.img.xz"
-OS_IMAGE="/tmp/raspios-lite-armhf.img.xz"
+# SHA256 from official Raspberry Pi downloads page
+OS_SHA256="a73d68b618c3ca40190c1aa04005a4dafcf32bc861c36c0d1fc6ddc48a370b6e"
 
-if [ ! -f "$OS_IMAGE" ]; then
+# Persistent cache — survives reboots unlike /tmp
+CACHE_DIR="$HOME/.cache/kiro-rocketpool"
+OS_IMAGE="$CACHE_DIR/raspios-lite-armhf.img.xz"
+mkdir -p "$CACHE_DIR"
+
+download_image() {
+    info "Downloading Raspberry Pi OS Lite (32-bit) — ~500MB..."
     curl -L --progress-bar "$OS_URL" -o "$OS_IMAGE"
-    success "Download complete"
+    success "Download complete — cached at $OS_IMAGE"
+}
+
+verify_image() {
+    info "Verifying SHA256 checksum..."
+    ACTUAL_SHA=$(shasum -a 256 "$OS_IMAGE" | awk '{print $1}')
+    if [ "$ACTUAL_SHA" = "$OS_SHA256" ]; then
+        success "SHA256 verified"
+        return 0
+    else
+        warn "SHA256 mismatch — image may be corrupt or outdated"
+        warn "Expected: $OS_SHA256"
+        warn "Got:      $ACTUAL_SHA"
+        return 1
+    fi
+}
+
+if [ -f "$OS_IMAGE" ]; then
+    info "Found cached image: $OS_IMAGE ($(du -sh "$OS_IMAGE" | cut -f1))"
+    if ! verify_image; then
+        warn "Cached image failed verification — re-downloading..."
+        rm -f "$OS_IMAGE"
+        download_image
+        verify_image || error "Downloaded image failed SHA256 verification. Check your internet connection or update the OS_SHA256 in the script."
+    fi
 else
-    info "Using cached image: $OS_IMAGE"
+    download_image
+    verify_image || error "Downloaded image failed SHA256 verification. Check your internet connection or update the OS_SHA256 in the script."
 fi
 
 # =============================================================================
