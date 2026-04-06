@@ -467,7 +467,7 @@ sudo defaults delete /Library/Preferences/SystemConfiguration/autodiskmount \
     AutomountDisksWithoutUserApproval 2>/dev/null || true
 
 # Re-mount to inject first-run script
-info "Mounting boot partition to inject first-run script..."
+info "Mounting boot partition to inject configuration files..."
 sleep 2
 diskutil mountDisk "$SD_DEVICE" || true
 sleep 2
@@ -492,16 +492,45 @@ fi
 
 if [ -z "$BOOT_MOUNT_PATH" ] || [ ! -d "$BOOT_MOUNT_PATH" ]; then
     warn "Could not find boot partition mount point."
-    warn "First-run script was NOT injected automatically."
-    warn "The Pi will boot but without the hardening configuration."
-    warn "You can manually copy the first-run script:"
-    warn "  sudo cp $FIRSTRUN_SCRIPT /Volumes/bootfs/firstrun.sh"
-    warn "  sudo chmod +x /Volumes/bootfs/firstrun.sh"
+    warn "Configuration files were NOT injected automatically."
+    warn "Manual steps required before booting the Pi:"
+    warn "  1. Mount the SD card boot partition"
+    warn "  2. Create userconf.txt with: echo '${PI_USER}:\$(openssl passwd -6 ${PI_PASSWORD})' > /Volumes/bootfs/userconf.txt"
+    warn "  3. Create empty ssh file: touch /Volumes/bootfs/ssh"
+    warn "  4. Copy firstrun.sh: cp $FIRSTRUN_SCRIPT /Volumes/bootfs/firstrun.sh"
+    warn "  5. Add to cmdline.txt: append 'systemd.run=/boot/firmware/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target' before 'rootwait'"
 else
-    info "Injecting first-run script into $BOOT_MOUNT_PATH..."
+    info "Injecting configuration into $BOOT_MOUNT_PATH..."
+
+    # 1. userconf.txt — bypasses the interactive first-boot wizard
+    HASHED_PASSWORD=$(openssl passwd -6 "$PI_PASSWORD")
+    echo "${PI_USER}:${HASHED_PASSWORD}" | sudo tee "$BOOT_MOUNT_PATH/userconf.txt" > /dev/null
+    success "userconf.txt written (bypasses setup wizard)"
+
+    # 2. ssh — empty file that enables SSH on first boot
+    sudo touch "$BOOT_MOUNT_PATH/ssh"
+    success "ssh file created (enables SSH)"
+
+    # 3. firstrun.sh — our hardening script
     sudo cp "$FIRSTRUN_SCRIPT" "$BOOT_MOUNT_PATH/firstrun.sh"
     sudo chmod +x "$BOOT_MOUNT_PATH/firstrun.sh"
-    success "First-run script injected"
+    success "firstrun.sh injected"
+
+    # 4. cmdline.txt — add systemd.run to execute firstrun.sh on boot
+    CMDLINE="$BOOT_MOUNT_PATH/cmdline.txt"
+    if [ -f "$CMDLINE" ]; then
+        # Add firstrun.sh execution before 'rootwait' if not already present
+        if ! grep -q "firstrun.sh" "$CMDLINE"; then
+            sudo sed -i '' 's|rootwait|systemd.run=/boot/firmware/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target rootwait|' "$CMDLINE"
+            success "cmdline.txt updated (firstrun.sh will execute on boot)"
+        else
+            info "cmdline.txt already references firstrun.sh — skipping"
+        fi
+    else
+        warn "cmdline.txt not found — firstrun.sh may not execute automatically"
+    fi
+
+    success "All boot configuration files injected"
 fi
 
 # =============================================================================
