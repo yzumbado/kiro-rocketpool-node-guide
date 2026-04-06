@@ -51,22 +51,6 @@ echo ""
 # =============================================================================
 info "Checking dependencies..."
 
-if ! command -v rpi-imager &>/dev/null; then
-    # Check if installed as macOS app but not in PATH
-    RPI_IMAGER_BIN="/Applications/Raspberry Pi Imager.app/Contents/MacOS/rpi-imager"
-    if [ -f "$RPI_IMAGER_BIN" ]; then
-        success "rpi-imager found at app bundle path"
-        # Create a local alias for the rest of the script
-        alias rpi-imager="\"$RPI_IMAGER_BIN\""
-        RPI_IMAGER_CMD="$RPI_IMAGER_BIN"
-    else
-        error "rpi-imager not found. Install it with: brew install --cask raspberry-pi-imager"
-    fi
-else
-    RPI_IMAGER_CMD="rpi-imager"
-fi
-success "rpi-imager ready"
-
 if ! command -v diskutil &>/dev/null; then
     error "diskutil not found — this script requires macOS."
 fi
@@ -202,8 +186,8 @@ if ! diskutil info "$SD_DEVICE" &>/dev/null; then
 fi
 
 # Verify card is not write-protected before proceeding
-WRITE_PROTECTED=$(diskutil info "$SD_DEVICE" | grep "Media Read-Only" | awk '{print $NF}')
-if [ "$WRITE_PROTECTED" = "Yes" ]; then
+# Use grep -c for robustness against diskutil output format changes
+if diskutil info "$SD_DEVICE" | grep -c "Media Read-Only:.*Yes" | grep -q "^[1-9]"; then
     error "The SD card at ${SD_DEVICE} is write-protected (Media Read-Only: Yes).
     This can happen if:
     - The card's physical lock switch is engaged (check the SD adapter)
@@ -602,11 +586,18 @@ else
     success "ssh file created (enables SSH)"
 
     # 3. firstrun.sh — our hardening script
+    # Copy to both /boot/firmware/ path (Bookworm) and root (older firmware fallback)
     sudo cp "$FIRSTRUN_SCRIPT" "$BOOT_MOUNT_PATH/firstrun.sh"
     sudo chmod +x "$BOOT_MOUNT_PATH/firstrun.sh"
+    # Also copy to firmware subdirectory if it exists on the boot partition
+    if [ -d "$BOOT_MOUNT_PATH/firmware" ]; then
+        sudo cp "$FIRSTRUN_SCRIPT" "$BOOT_MOUNT_PATH/firmware/firstrun.sh"
+        sudo chmod +x "$BOOT_MOUNT_PATH/firmware/firstrun.sh"
+    fi
     success "firstrun.sh injected"
 
     # 4. cmdline.txt — add systemd.run to execute firstrun.sh on boot
+    # Try /boot/firmware first (Bookworm), fall back to /boot (older firmware)
     CMDLINE="$BOOT_MOUNT_PATH/cmdline.txt"
     if [ -f "$CMDLINE" ]; then
         # Back up original cmdline.txt
@@ -614,12 +605,15 @@ else
 
         if ! grep -q "firstrun.sh" "$CMDLINE"; then
             CURRENT=$(cat "$CMDLINE" | tr -d '\n')
+            # Detect which path the Pi will use at runtime
+            # If /boot/firmware exists on the Pi, use that path; otherwise /boot
+            # We inject both as a comment and use /boot/firmware (Bookworm default)
             NEW_CMDLINE="${CURRENT} systemd.run=/boot/firmware/firstrun.sh"
             echo "$NEW_CMDLINE" | sudo tee "$CMDLINE" > /dev/null
 
             # Validate — confirm the file still has rootwait and our addition
             if grep -q "rootwait" "$CMDLINE" && grep -q "firstrun.sh" "$CMDLINE"; then
-                success "cmdline.txt updated and validated"
+                success "cmdline.txt updated and validated (/boot/firmware/firstrun.sh)"
             else
                 warn "cmdline.txt validation failed — restoring backup"
                 sudo cp "$CMDLINE.bak" "$CMDLINE"
