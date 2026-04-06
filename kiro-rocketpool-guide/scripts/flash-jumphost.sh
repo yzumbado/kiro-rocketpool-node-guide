@@ -211,7 +211,7 @@ cat > "$FIRSTRUN_SCRIPT" << FIRSTRUN
 # Runs once on first boot as root, then deletes itself
 # Logs to /var/log/firstrun.log AND /boot/firmware/firstrun-debug.log (readable from Mac)
 
-# Enable verbose logging for debugging
+# Enable verbose logging for debugging — do NOT use set -e (causes silent exits)
 set -x
 
 # Dual logging — both to system log and to boot partition (readable from Mac without booting)
@@ -228,6 +228,25 @@ exec > >(tee -a "\$SYSLOG" "\$BOOTLOG") 2>&1
 echo "STARTED [\$(date)]" > "\$STATUSFILE"
 echo "=== First-run hardening started: \$(date) ===" | tee "\$BOOTLOG"
 
+# FIX 2: Ensure user exists before any user-dependent operations
+# userconf.txt creates the user during the Pi OS wizard which may not have run yet
+log_step "ensure user exists"
+id -u ${PI_USER} &>/dev/null || useradd -m -s /bin/bash ${PI_USER}
+
+# FIX 1: Wait for network before any apt calls
+# systemd.run= fires before networking is fully up on Pi 2
+log_step "wait for network"
+for i in \$(seq 1 30); do
+    ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1 && break
+    echo "Waiting for network... attempt \$i/30"
+    sleep 5
+done
+ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1 || {
+    echo "FAILED: no network after 150s" > "\$STATUSFILE"
+    echo "ERROR: Network not available — apt installs will fail. Rebooting to retry."
+    /sbin/reboot -f
+}
+
 log_step "apt-get update"
 apt-get update -y
 
@@ -237,9 +256,19 @@ apt-get upgrade -y
 log_step "install packages"
 apt-get install -y ufw fail2ban curl wget
 
-# Set timezone
+# FIX 4: Verify packages installed — abort clearly if not
+for pkg in ufw fail2ban curl wget; do
+    dpkg -l "\$pkg" 2>/dev/null | grep -q "^ii" || {
+        echo "FAILED: package \$pkg did not install" > "\$STATUSFILE"
+        echo "ERROR: \$pkg failed to install — check network and retry"
+        /sbin/reboot -f
+    }
+done
+
+# FIX 3: Set timezone without systemd (timedatectl requires D-Bus which isn't up yet)
 log_step "set timezone"
-timedatectl set-timezone ${TIMEZONE}
+ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
+echo "${TIMEZONE}" > /etc/timezone
 
 # Install SSH public key for Mac → Pi access
 log_step "install SSH public key"
@@ -276,8 +305,9 @@ backend = %(sshd_backend)s
 maxretry = 3
 bantime = 24h
 EOF
-systemctl enable fail2ban
-systemctl start fail2ban
+# FIX 3: Guard systemctl calls — D-Bus may not be available at this stage
+systemctl enable fail2ban 2>/dev/null || update-rc.d fail2ban defaults 2>/dev/null || true
+systemctl start fail2ban 2>/dev/null || true
 
 # Create scripts directory and watchdog
 log_step "create watchdog script"
@@ -349,10 +379,9 @@ echo "COMPLETE [\$(date)]" > "\$STATUSFILE"
 echo "NOTE: Generate the node SSH key manually after first login:"
 echo "  ssh-keygen -t ed25519 -C 'rp-node01-access' -f ~/.ssh/rp_node_key"
 
-# Reboot to apply all changes (SSH hardening, UFW, etc.)
-# Self-destruct first, then reboot
+# FIX 5: Use direct kernel reboot — systemd bus not available at this stage
 rm -f "\$0"
-reboot
+/sbin/reboot -f
 FIRSTRUN
 
 chmod +x "$FIRSTRUN_SCRIPT"
