@@ -172,8 +172,9 @@ else
 fi
 
 MAC_PUBKEY=$(cat "$JUMPHOST_PUB")
-
-# =============================================================================
+if [ -z "$MAC_PUBKEY" ]; then
+    error "SSH public key is empty — cannot continue. Check $JUMPHOST_PUB"
+fi# =============================================================================
 # STEP 4: Detect SD card
 # =============================================================================
 echo ""
@@ -213,6 +214,13 @@ fi
 
 SD_SIZE=$(diskutil info "$SD_DEVICE" | grep "Disk Size" | awk '{print $3, $4}')
 SD_NAME=$(diskutil info "$SD_DEVICE" | grep "Media Name" | cut -d: -f2 | xargs)
+
+# Minimum size check — image decompresses to ~1.9GB, need at least 4GB
+SD_SIZE_BYTES=$(diskutil info "$SD_DEVICE" | grep "Disk Size" | grep -oE '[0-9]+ Bytes' | awk '{print $1}')
+MIN_SIZE_BYTES=4000000000
+if [ -n "$SD_SIZE_BYTES" ] && [ "$SD_SIZE_BYTES" -lt "$MIN_SIZE_BYTES" ]; then
+    error "SD card is too small (${SD_SIZE}). Minimum 4GB required."
+fi
 
 # =============================================================================
 # STEP 5: Build the first-run hardening script
@@ -262,13 +270,13 @@ ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1 || {
 }
 
 log_step "apt-get update"
-apt-get update -y
+DEBIAN_FRONTEND=noninteractive apt-get update -y
 
 log_step "apt-get upgrade"
-apt-get upgrade -y
+DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
 
 log_step "install packages"
-apt-get install -y ufw fail2ban curl wget
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ufw fail2ban curl wget
 
 # FIX 4: Verify packages installed — abort clearly if not
 for pkg in ufw fail2ban curl wget; do
@@ -376,7 +384,7 @@ chown -R ${PI_USER}:${PI_USER} /home/${PI_USER}/scripts
 
 log_step "configure SSH client"
 mkdir -p /home/${PI_USER}/.ssh
-cat >> /home/${PI_USER}/.ssh/config << EOF
+grep -q "Host ${NODE_HOSTNAME}" /home/${PI_USER}/.ssh/config 2>/dev/null || cat >> /home/${PI_USER}/.ssh/config << EOF
 Host ${NODE_HOSTNAME}
     HostName ${NODE_HOST}
     User nodeop
@@ -523,10 +531,12 @@ IMAGE_SIZE_MB=$((IMAGE_SIZE / 1024 / 1024))
 info "Image size: ${IMAGE_SIZE_MB}MB"
 
 if command -v pv &>/dev/null; then
-    pv -s "$IMAGE_SIZE" -N "  🚀 Flashing SD card" "$OS_IMG" | sudo dd of="$RAW_DEVICE" bs=4m
+    pv -s "$IMAGE_SIZE" -N "  🚀 Flashing SD card" "$OS_IMG" | sudo dd of="$RAW_DEVICE" bs=4m \
+        || error "Flash failed — dd reported an error. Check device permissions and card health."
 else
     info "Progress updates every 5 seconds..."
-    sudo dd if="$OS_IMG" of="$RAW_DEVICE" bs=4m status=progress
+    sudo dd if="$OS_IMG" of="$RAW_DEVICE" bs=4m status=progress \
+        || error "Flash failed — dd reported an error. Check device permissions and card health."
 fi
 sync
 success "Image written"
@@ -538,27 +548,28 @@ sudo defaults delete /Library/Preferences/SystemConfiguration/autodiskmount \
 
 # Re-mount to inject first-run script
 info "Mounting boot partition to inject configuration files..."
-sleep 2
 diskutil mountDisk "$SD_DEVICE" || true
-sleep 2
 
-# Find the boot partition (FAT32, named 'bootfs' or 'boot')
-BOOT_MOUNT=$(diskutil list "$SD_DEVICE" | grep -i "boot\|fat" | awk '{print $NF}' | head -1)
+# Poll for mount point instead of fixed sleep
 BOOT_MOUNT_PATH=""
-
-if [ -n "$BOOT_MOUNT" ]; then
-    BOOT_MOUNT_PATH=$(diskutil info "$BOOT_MOUNT" 2>/dev/null | grep "Mount Point" | awk '{print $3}')
-fi
-
-# Fallback: check common mount paths
-if [ -z "$BOOT_MOUNT_PATH" ] || [ ! -d "$BOOT_MOUNT_PATH" ]; then
+for i in $(seq 1 15); do
     for path in "/Volumes/bootfs" "/Volumes/boot" "/Volumes/BOOT"; do
         if [ -d "$path" ]; then
             BOOT_MOUNT_PATH="$path"
-            break
+            break 2
         fi
     done
-fi
+    # Also try via diskutil
+    BOOT_MOUNT=$(diskutil list "$SD_DEVICE" 2>/dev/null | grep -i "boot\|fat" | awk '{print $NF}' | head -1)
+    if [ -n "$BOOT_MOUNT" ]; then
+        MP=$(diskutil info "$BOOT_MOUNT" 2>/dev/null | grep "Mount Point" | awk '{print $3}')
+        if [ -n "$MP" ] && [ -d "$MP" ]; then
+            BOOT_MOUNT_PATH="$MP"
+            break
+        fi
+    fi
+    sleep 1
+done
 
 if [ -z "$BOOT_MOUNT_PATH" ] || [ ! -d "$BOOT_MOUNT_PATH" ]; then
     warn "Could not find boot partition mount point."
@@ -600,11 +611,8 @@ else
     if [ -f "$CMDLINE" ]; then
         # Back up original cmdline.txt
         sudo cp "$CMDLINE" "$CMDLINE.bak"
-        ORIGINAL_CMDLINE=$(cat "$CMDLINE")
 
         if ! grep -q "firstrun.sh" "$CMDLINE"; then
-            # Read current content, append systemd.run parameter
-            # Use a safe approach: append to end of line rather than inserting before rootwait
             CURRENT=$(cat "$CMDLINE" | tr -d '\n')
             NEW_CMDLINE="${CURRENT} systemd.run=/boot/firmware/firstrun.sh"
             echo "$NEW_CMDLINE" | sudo tee "$CMDLINE" > /dev/null
@@ -628,9 +636,6 @@ else
     success "All boot configuration files injected"
 fi
 
-# =============================================================================
-# STEP 9: Done
-# =============================================================================
 # =============================================================================
 # STEP 9: Generate setup-mac-ssh.sh and run post-flash flow
 # =============================================================================
