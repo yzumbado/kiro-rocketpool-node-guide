@@ -146,13 +146,12 @@ read -r WEBHOOK_URL
 echo ""
 info "Checking SSH keys..."
 
-JUMPHOST_KEY="$HOME/.ssh/id_ed25519_jumphost"
+JUMPHOST_KEY="$HOME/.ssh/id_ed25519_${HOSTNAME}"
 JUMPHOST_PUB="${JUMPHOST_KEY}.pub"
 
 if [ ! -f "$JUMPHOST_PUB" ]; then
-    warn "No jumphost SSH key found at ${JUMPHOST_PUB}"
     info "Generating new Ed25519 key pair for Mac → Pi access..."
-    ssh-keygen -t ed25519 -C "mac-to-jumphost" -f "$JUMPHOST_KEY" -N ""
+    ssh-keygen -t ed25519 -C "mac-to-${HOSTNAME}" -f "$JUMPHOST_KEY" -N ""
     success "Key generated: ${JUMPHOST_PUB}"
 else
     success "Found existing key: ${JUMPHOST_PUB}"
@@ -521,8 +520,17 @@ echo "=============================================="
 echo ""
 echo "Next steps:"
 echo ""
-echo "  1. Set DHCP reservation in your router:"
-echo "       Pi MAC → $PI_HOST"
+
+# Step 1 — differs based on whether static IP was configured
+if [ -n "$PI_IP" ]; then
+    echo "  1. Set DHCP reservation in your router:"
+    echo "       Assign IP $PI_IP to the Pi's MAC address."
+    echo "       Find the MAC in your router's connected devices list after first boot."
+else
+    echo "  1. No router configuration needed."
+    echo "       Your Pi will be reachable at ${HOSTNAME}.local via mDNS."
+fi
+
 echo ""
 echo "  2. Insert SD card into Pi 2, connect Ethernet, power on"
 echo "     Wait ~3 minutes for first boot + hardening to complete"
@@ -536,7 +544,7 @@ echo ""
 echo "  5. Add Mac SSH config entry:"
 cat << SSHCONFIG
        # Add to ~/.ssh/config on your Mac:
-       Host jumphost
+       Host $HOSTNAME
            HostName $PI_HOST
            User $PI_USER
            IdentityFile $JUMPHOST_KEY
@@ -545,7 +553,7 @@ cat << SSHCONFIG
        Host $NODE_HOSTNAME
            HostName $NODE_HOST
            User nodeop
-           ProxyJump jumphost
+           ProxyJump $HOSTNAME
            IdentityFile /dev/null
 SSHCONFIG
 echo ""
