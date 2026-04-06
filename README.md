@@ -57,24 +57,27 @@ This repo is the artifact of that learning process. The commit history reflects 
 README.md                          ← You are here
 SOURCES.md                         ← Research sources and prior art
 kiro-rocketpool-guide/             ← The complete guide
-  README.md                        ← Guide index and table of contents
-  00-prerequisites.md              ← What you need before starting
-  00b-jump-host-setup.md           ← Raspberry Pi 2 jump host setup
-  01-hardware-prep.md              ← BIOS flash, WD firmware
-  02-os-install.md                 ← Ubuntu install + SSH handoff
-  HANDOFF.md                       ← Agent entry point
-  03-security-hardening.md         ← SSH, UFW, fail2ban, kernel hardening
-  04-storage-docker.md             ← 4TB NVMe + Docker
-  05-smartnode-install.md          ← Rocket Pool CLI
-  06-testnet-setup.md              ← Testnet config + validator + metrics
-  07-mainnet-queue.md              ← Mainnet deposit + parallel testnet
-  08-mainnet-transition.md         ← Go-live checklist
-  09-appendix.md                   ← Troubleshooting, maintenance, RPL staking
-  10-pending-improvements.md       ← Deferred improvements tracker
-  scripts/flash-jumphost.sh        ← Automated Pi SD card flash script
 ```
 
-The original source guides that informed this work are also included at the root — see `SOURCES.md` for context.
+| File | Description |
+|---|---|
+| [kiro-rocketpool-guide/README.md](./kiro-rocketpool-guide/README.md) | Guide index and table of contents |
+| [00-prerequisites.md](./kiro-rocketpool-guide/00-prerequisites.md) | What you need before starting |
+| [00b-jump-host-setup.md](./kiro-rocketpool-guide/00b-jump-host-setup.md) | Raspberry Pi 2 jump host setup |
+| [01-hardware-prep.md](./kiro-rocketpool-guide/01-hardware-prep.md) | BIOS flash, WD firmware |
+| [02-os-install.md](./kiro-rocketpool-guide/02-os-install.md) | Ubuntu install + SSH handoff |
+| [HANDOFF.md](./kiro-rocketpool-guide/HANDOFF.md) | Agent entry point |
+| [03-security-hardening.md](./kiro-rocketpool-guide/03-security-hardening.md) | SSH, UFW, fail2ban, kernel hardening |
+| [04-storage-docker.md](./kiro-rocketpool-guide/04-storage-docker.md) | 4TB NVMe + Docker |
+| [05-smartnode-install.md](./kiro-rocketpool-guide/05-smartnode-install.md) | Rocket Pool CLI |
+| [06-testnet-setup.md](./kiro-rocketpool-guide/06-testnet-setup.md) | Testnet config + validator + metrics |
+| [07-mainnet-queue.md](./kiro-rocketpool-guide/07-mainnet-queue.md) | Mainnet deposit + parallel testnet |
+| [08-mainnet-transition.md](./kiro-rocketpool-guide/08-mainnet-transition.md) | Go-live checklist |
+| [09-appendix.md](./kiro-rocketpool-guide/09-appendix.md) | Troubleshooting, maintenance, RPL staking |
+| [10-pending-improvements.md](./kiro-rocketpool-guide/10-pending-improvements.md) | Deferred improvements tracker |
+| [scripts/flash-jumphost.sh](./kiro-rocketpool-guide/scripts/flash-jumphost.sh) | Automated Pi SD card flash script |
+
+The original source guides that informed this work are also included at the root — see [SOURCES.md](./SOURCES.md) for context.
 
 ---
 
