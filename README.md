@@ -78,6 +78,52 @@ The original source guides that informed this work are also included at the root
 
 ---
 
+## How to Use This Guide
+
+### Option A: With Kiro AI (Recommended — most automated)
+
+This guide is designed to be executed with Kiro as your co-pilot. Kiro reads the steering file automatically and knows the full context of the project — hardware, decisions, file structure, style — without you having to explain anything.
+
+**Step 1: Clone the repo and open it in Kiro**
+
+```bash
+git clone https://github.com/yzumbado/kiro-rocketpool-node-guide.git
+cd kiro-rocketpool-node-guide
+```
+
+Open the folder in your IDE with Kiro installed. The steering file at `.kiro/steering/rocketpool-guide.md` loads automatically — Kiro is now fully briefed on the project.
+
+**Step 2: Start the human section yourself**
+
+The first part of the guide requires physical hardware interaction — BIOS flash, OS install, Pi setup. Work through these files in order:
+
+1. `kiro-rocketpool-guide/00-prerequisites.md`
+2. `kiro-rocketpool-guide/00b-jump-host-setup.md` (Pi jump host)
+3. `kiro-rocketpool-guide/01-hardware-prep.md` (BIOS)
+4. `kiro-rocketpool-guide/02-os-install.md` (Ubuntu install + SSH)
+
+Kiro can guide you through each step — just ask "walk me through Phase 0" and it will.
+
+**Step 3: Hand off to Kiro**
+
+Once SSH is working, open a new Kiro chat and say:
+
+> *"I've completed the human section of the Kiro Rocket Pool Node Guide. My node hostname is `rp-node01.local`, username is `nodeop`. Access is via the Pi jump host at `pi-jumphost.local`. Please continue from Phase 3 — start with the bootstrap check in HANDOFF.md."*
+
+Kiro will run a bootstrap check, confirm the environment, and execute all remaining phases over SSH — security hardening, storage, Docker, Rocket Pool, testnet setup, and mainnet queue strategy.
+
+**Step 4: Track your progress**
+
+Copy `kiro-rocketpool-guide/yoel-notes.md` to your own notes file and fill it in as you go. This file is in `.gitignore` so your personal details stay local.
+
+---
+
+### Option B: Manual (no Kiro)
+
+Work through the guide files in order starting from `kiro-rocketpool-guide/README.md`. Every step has full commands, expected outputs, and verification checks — no AI required.
+
+---
+
 ## Hardware
 
 | Component | Spec |
