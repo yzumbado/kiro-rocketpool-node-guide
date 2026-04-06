@@ -108,13 +108,19 @@ ask "Pi static IP for DHCP reservation (or press Enter to skip):"
 read -r INPUT_PI_IP
 PI_IP="${INPUT_PI_IP:-}"
 
+# --- Node hostname ---
+DEFAULT_NODE_HOSTNAME="rp-node01"
+ask "Node (Beelink) hostname [default: ${DEFAULT_NODE_HOSTNAME}]:"
+read -r INPUT_NODE_HOSTNAME
+NODE_HOSTNAME="${INPUT_NODE_HOSTNAME:-$DEFAULT_NODE_HOSTNAME}"
+
 ask "Node (Beelink) static IP for DHCP reservation (or press Enter to skip):"
 read -r INPUT_NODE_IP
 NODE_IP="${INPUT_NODE_IP:-}"
 
 # Determine hostnames to use in SSH config
 PI_HOST="${PI_IP:-${HOSTNAME}.local}"
-NODE_HOST="${NODE_IP:-rp-node01.local}"
+NODE_HOST="${NODE_IP:-${NODE_HOSTNAME}.local}"
 
 # --- Discord webhook (optional) ---
 ask "Discord webhook URL for watchdog alerts (press Enter to skip):"
@@ -232,7 +238,7 @@ mkdir -p /home/${PI_USER}/scripts
 
 cat > /home/${PI_USER}/scripts/node-watchdog.sh << 'WATCHDOG'
 #!/bin/bash
-NODE_HOST="rp-node01"
+NODE_HOST="${NODE_HOSTNAME}"
 WEBHOOK_URL="${WEBHOOK_URL}"
 ALERT_COOLDOWN=3600
 ALERT_FILE="/tmp/watchdog_last_alert"
@@ -280,7 +286,7 @@ chown -R ${PI_USER}:${PI_USER} /home/${PI_USER}/scripts
 # Configure SSH client for node access
 mkdir -p /home/${PI_USER}/.ssh
 cat >> /home/${PI_USER}/.ssh/config << EOF
-Host rp-node01
+Host ${NODE_HOSTNAME}
     HostName ${NODE_HOST}
     User nodeop
     IdentityFile /home/${PI_USER}/.ssh/rp_node_key
@@ -313,7 +319,7 @@ echo "  Pi username:      $PI_USER"
 echo "  Pi password:      [set]"
 echo "  Timezone:         $TIMEZONE"
 echo "  Pi static IP:     ${PI_IP:-[not set — using ${HOSTNAME}.local]}"
-echo "  Node host:        ${NODE_IP:-[not set — using rp-node01.local]}"
+echo "  Node host:        ${NODE_IP:-[not set — using ${NODE_HOSTNAME}.local]}"
 echo "  SSH key (Mac→Pi): $JUMPHOST_PUB"
 echo "  Watchdog webhook: ${WEBHOOK_URL:-[not set]}"
 echo ""
@@ -388,16 +394,16 @@ echo ""
 echo "Next steps:"
 echo ""
 echo "  1. Set DHCP reservation in your router:"
-echo "       Pi MAC → $PI_IP"
+echo "       Pi MAC → $PI_HOST"
 echo ""
 echo "  2. Insert SD card into Pi 2, connect Ethernet, power on"
 echo "     Wait ~3 minutes for first boot + hardening to complete"
 echo ""
 echo "  3. Test SSH from your Mac:"
-echo "       ssh -i $JUMPHOST_KEY ${PI_USER}@${PI_IP}"
+echo "       ssh -i $JUMPHOST_KEY ${PI_USER}@${PI_HOST}"
 echo ""
 echo "  4. Once logged in, generate the node SSH key:"
-echo "       ssh-keygen -t ed25519 -C 'rp-node01-access' -f ~/.ssh/rp_node_key"
+echo "       ssh-keygen -t ed25519 -C '${NODE_HOSTNAME}-access' -f ~/.ssh/rp_node_key"
 echo ""
 echo "  5. Add Mac SSH config entry:"
 cat << SSHCONFIG
@@ -408,7 +414,7 @@ cat << SSHCONFIG
            IdentityFile $JUMPHOST_KEY
            ServerAliveInterval 60
 
-       Host rp-node01
+       Host $NODE_HOSTNAME
            HostName $NODE_HOST
            User nodeop
            ProxyJump jumphost
