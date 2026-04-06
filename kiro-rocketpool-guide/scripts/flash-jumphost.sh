@@ -71,10 +71,16 @@ if ! command -v diskutil &>/dev/null; then
     error "diskutil not found — this script requires macOS."
 fi
 
-# pv is optional but recommended for better progress display
+# pv is required for progress display — auto-install if missing
 if ! command -v pv &>/dev/null; then
-    warn "pv not installed — progress display will be limited. Install with: brew install pv"
+    info "Installing pv (required for flash progress bar)..."
+    if command -v brew &>/dev/null; then
+        brew install pv
+    else
+        error "pv is not installed and Homebrew is not available. Install pv manually: brew install pv"
+    fi
 fi
+success "pv ready"
 
 # =============================================================================
 # STEP 2: Collect configuration
@@ -454,7 +460,6 @@ info "Image size: ${IMAGE_SIZE_MB}MB"
 if command -v pv &>/dev/null; then
     pv -s "$IMAGE_SIZE" "$OS_IMG" | sudo dd of="$RAW_DEVICE" bs=4m
 else
-    warn "pv not installed — install it for a better progress bar: brew install pv"
     info "Progress updates every 5 seconds..."
     sudo dd if="$OS_IMG" of="$RAW_DEVICE" bs=4m status=progress
 fi

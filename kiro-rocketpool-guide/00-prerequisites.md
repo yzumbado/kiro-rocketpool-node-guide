@@ -6,7 +6,7 @@
 |---|---|
 | Hardware | Beelink GTI15 (Intel Core Ultra 9 285H, 64GB DDR5, 1TB OS NVMe, 4TB WD Black SN850X) |
 | Raspberry Pi 2 | Jump host — security boundary between your Mac and the node (any revision) |
-| MicroSD card | 16GB+ for the Pi |
+| MicroSD card | 16GB+ — use a quality card: Samsung PRO Endurance, SanDisk Endurance, or Lexar. Avoid generic/unbranded cards — cheap controllers can permanently lock on write errors |
 | USB drive | One 16GB+ USB drive — used first for the BIOS flash, then reformatted for the Ubuntu installer |
 | Network | Wired Ethernet to your router for both the Pi and the node — no Wi-Fi during setup |
 | Testnet ETH | Hoodi testnet ETH for gas — faucet at `https://hoodi.ethpandaops.io/` |
@@ -26,6 +26,20 @@ When you have your final router, set DHCP reservations so both devices always ge
 |---|---|---|
 | Raspberry Pi 2 | `pi-jumphost` | `192.168.1.10` |
 | Beelink GTI15 | `rp-node01` | `192.168.1.20` |
+
+## Mac Software Requirements
+
+Before running the flash script, install these tools on your Mac:
+
+```bash
+# Raspberry Pi Imager (used for image management)
+brew install --cask raspberry-pi-imager
+
+# pv — pipe viewer, provides progress bar during SD card flash
+brew install pv
+```
+
+> 📝 **Note:** `pv` is required for the progress bar during flashing. Without it the script falls back to `dd` with minimal output — you won't know how much is left or when it will finish.
 
 ## Setup Order
 

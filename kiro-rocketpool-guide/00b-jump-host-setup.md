@@ -62,13 +62,16 @@ If you do have a router that supports DHCP reservations, setting fixed IPs now m
 
 This is the primary path. A script collects your configuration, confirms it with you, then flashes and injects a hardening script in one shot.
 
-**Install rpi-imager if you don't have it:**
+**Install required tools if you don't have them:**
 ```bash
-# Install as a macOS app (it's a cask, not a formula)
+# Raspberry Pi Imager (used for image management)
 brew install --cask raspberry-pi-imager
+
+# pv — pipe viewer for progress bar during flash
+brew install pv
 ```
 
-> 📝 **Note:** This installs `Raspberry Pi Imager.app` to your Applications folder. The CLI binary lives inside the app bundle at `/Applications/Raspberry\ Pi\ Imager.app/Contents/MacOS/rpi-imager` — the flash script handles this path automatically.
+> 📝 **Note:** This installs `Raspberry Pi Imager.app` to your Applications folder. The flash script handles the binary path automatically.
 
 > ⚠️ **Warning:** On macOS Sequoia/Sonoma, `rpi-imager --cli` may fail with an authorization error even after granting permissions in System Settings. The flash script uses `dd` directly to avoid this macOS sandboxing issue — no manual permission grants needed.
 
