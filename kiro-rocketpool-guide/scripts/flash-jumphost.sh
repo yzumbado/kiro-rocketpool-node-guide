@@ -408,13 +408,60 @@ echo ""
 info "Unmounting $SD_DEVICE before flash..."
 diskutil unmountDisk "$SD_DEVICE" || true
 
-info "Flashing $SD_DEVICE — this takes 3–8 minutes..."
+RAW_DEVICE="${SD_DEVICE/disk/rdisk}"
+info "Flashing $RAW_DEVICE using dd — this takes 3–8 minutes..."
 echo ""
 
-sudo "$RPI_IMAGER_CMD" --cli \
-    --first-run-script "$FIRSTRUN_SCRIPT" \
-    "$OS_IMAGE" \
-    "$SD_DEVICE"
+# Decompress image if needed
+OS_IMG="${OS_IMAGE%.xz}"
+if [ ! -f "$OS_IMG" ]; then
+    info "Decompressing image..."
+    xz -dk "$OS_IMAGE"
+    success "Decompressed to $OS_IMG"
+fi
+
+# Write image with dd (bypasses macOS app sandbox restrictions)
+sudo dd if="$OS_IMG" of="$RAW_DEVICE" bs=4m status=progress
+sync
+success "Image written"
+
+# Re-mount to inject first-run script
+info "Mounting boot partition to inject first-run script..."
+sleep 2
+diskutil mountDisk "$SD_DEVICE" || true
+sleep 2
+
+# Find the boot partition (FAT32, named 'bootfs' or 'boot')
+BOOT_MOUNT=$(diskutil list "$SD_DEVICE" | grep -i "boot\|fat" | awk '{print $NF}' | head -1)
+BOOT_MOUNT_PATH=""
+
+if [ -n "$BOOT_MOUNT" ]; then
+    BOOT_MOUNT_PATH=$(diskutil info "$BOOT_MOUNT" 2>/dev/null | grep "Mount Point" | awk '{print $3}')
+fi
+
+# Fallback: check common mount paths
+if [ -z "$BOOT_MOUNT_PATH" ] || [ ! -d "$BOOT_MOUNT_PATH" ]; then
+    for path in "/Volumes/bootfs" "/Volumes/boot" "/Volumes/BOOT"; do
+        if [ -d "$path" ]; then
+            BOOT_MOUNT_PATH="$path"
+            break
+        fi
+    done
+fi
+
+if [ -z "$BOOT_MOUNT_PATH" ] || [ ! -d "$BOOT_MOUNT_PATH" ]; then
+    warn "Could not find boot partition mount point."
+    warn "First-run script was NOT injected automatically."
+    warn "The Pi will boot but without the hardening configuration."
+    warn "You can manually copy the first-run script:"
+    warn "  sudo cp $FIRSTRUN_SCRIPT /Volumes/bootfs/firstrun.sh"
+    warn "  sudo chmod +x /Volumes/bootfs/firstrun.sh"
+else
+    info "Injecting first-run script into $BOOT_MOUNT_PATH..."
+    sudo cp "$FIRSTRUN_SCRIPT" "$BOOT_MOUNT_PATH/firstrun.sh"
+    sudo chmod +x "$BOOT_MOUNT_PATH/firstrun.sh"
+    success "First-run script injected"
+fi
 
 # =============================================================================
 # STEP 9: Done

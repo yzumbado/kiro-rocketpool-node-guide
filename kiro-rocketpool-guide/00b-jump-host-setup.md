@@ -70,6 +70,8 @@ brew install --cask raspberry-pi-imager
 
 > 📝 **Note:** This installs `Raspberry Pi Imager.app` to your Applications folder. The CLI binary lives inside the app bundle at `/Applications/Raspberry\ Pi\ Imager.app/Contents/MacOS/rpi-imager` — the flash script handles this path automatically.
 
+> ⚠️ **Warning:** On macOS Sequoia/Sonoma, `rpi-imager --cli` may fail with an authorization error even after granting permissions in System Settings. The flash script uses `dd` directly to avoid this macOS sandboxing issue — no manual permission grants needed.
+
 **Run the flash script:**
 ```bash
 # From the kiro-rocketpool-guide/scripts/ directory
