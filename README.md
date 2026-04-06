@@ -100,10 +100,10 @@ Open the folder in your IDE with Kiro installed. The steering file at `.kiro/ste
 
 The first part of the guide requires physical hardware interaction — BIOS flash, OS install, Pi setup. Work through these files in order:
 
-1. `kiro-rocketpool-guide/00-prerequisites.md`
-2. `kiro-rocketpool-guide/00b-jump-host-setup.md` (Pi jump host)
-3. `kiro-rocketpool-guide/01-hardware-prep.md` (BIOS)
-4. `kiro-rocketpool-guide/02-os-install.md` (Ubuntu install + SSH)
+1. [`kiro-rocketpool-guide/00-prerequisites.md`](./kiro-rocketpool-guide/00-prerequisites.md)
+2. [`kiro-rocketpool-guide/00b-jump-host-setup.md`](./kiro-rocketpool-guide/00b-jump-host-setup.md) (Pi jump host)
+3. [`kiro-rocketpool-guide/01-hardware-prep.md`](./kiro-rocketpool-guide/01-hardware-prep.md) (BIOS)
+4. [`kiro-rocketpool-guide/02-os-install.md`](./kiro-rocketpool-guide/02-os-install.md) (Ubuntu install + SSH)
 
 Kiro can guide you through each step — just ask "walk me through Phase 0" and it will.
 
@@ -111,19 +111,19 @@ Kiro can guide you through each step — just ask "walk me through Phase 0" and 
 
 Once SSH is working, open a new Kiro chat and say:
 
-> *"I've completed the human section of the Kiro Rocket Pool Node Guide. My node hostname is `rp-node01.local`, username is `nodeop`. Access is via the Pi jump host at `pi-jumphost.local`. Please continue from Phase 3 — start with the bootstrap check in HANDOFF.md."*
+> *"I've completed the human section of the Kiro Rocket Pool Node Guide. My node hostname is `rp-node01.local`, username is `nodeop`. Access is via the Pi jump host at `pi-jumphost.local`. Please continue from Phase 3 — start with the bootstrap check in [`HANDOFF.md`](./kiro-rocketpool-guide/HANDOFF.md)."*
 
 Kiro will run a bootstrap check, confirm the environment, and execute all remaining phases over SSH — security hardening, storage, Docker, Rocket Pool, testnet setup, and mainnet queue strategy.
 
 **Step 4: Track your progress**
 
-Copy `kiro-rocketpool-guide/yoel-notes.md` to your own notes file and fill it in as you go. This file is in `.gitignore` so your personal details stay local.
+Copy [`kiro-rocketpool-guide/yoel-notes.md`](./kiro-rocketpool-guide/yoel-notes.md) to your own notes file and fill it in as you go. This file is in `.gitignore` so your personal details stay local.
 
 ---
 
 ### Option B: Manual (no Kiro)
 
-Work through the guide files in order starting from `kiro-rocketpool-guide/README.md`. Every step has full commands, expected outputs, and verification checks — no AI required.
+Work through the guide files in order starting from [`kiro-rocketpool-guide/README.md`](./kiro-rocketpool-guide/README.md). Every step has full commands, expected outputs, and verification checks — no AI required.
 
 ---
 
