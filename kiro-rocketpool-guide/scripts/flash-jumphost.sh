@@ -71,6 +71,11 @@ if ! command -v diskutil &>/dev/null; then
     error "diskutil not found — this script requires macOS."
 fi
 
+# pv is optional but recommended for better progress display
+if ! command -v pv &>/dev/null; then
+    warn "pv not installed — progress display will be limited. Install with: brew install pv"
+fi
+
 # =============================================================================
 # STEP 2: Collect configuration
 # =============================================================================
@@ -441,8 +446,18 @@ if [ ! -f "$OS_IMG" ]; then
     success "Decompressed to $OS_IMG"
 fi
 
-# Write image with dd
-sudo dd if="$OS_IMG" of="$RAW_DEVICE" bs=4m status=progress
+# Write image with dd — use pv for progress bar if available
+IMAGE_SIZE=$(stat -f%z "$OS_IMG")
+IMAGE_SIZE_MB=$((IMAGE_SIZE / 1024 / 1024))
+info "Image size: ${IMAGE_SIZE_MB}MB"
+
+if command -v pv &>/dev/null; then
+    pv -s "$IMAGE_SIZE" "$OS_IMG" | sudo dd of="$RAW_DEVICE" bs=4m
+else
+    warn "pv not installed — install it for a better progress bar: brew install pv"
+    info "Progress updates every 5 seconds..."
+    sudo dd if="$OS_IMG" of="$RAW_DEVICE" bs=4m status=progress
+fi
 sync
 success "Image written"
 
