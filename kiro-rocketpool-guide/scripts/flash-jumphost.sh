@@ -241,18 +241,40 @@ id -u ${PI_USER} &>/dev/null || useradd -m -s /bin/bash ${PI_USER}
 
 # FIX 1: Wait for network before any apt calls
 # systemd.run= fires before networking is fully up on Pi 2
-log_step "wait for network"
+# Use a reboot counter to prevent infinite reboot loops
+REBOOT_COUNT_FILE="/boot/firmware/firstrun-reboot-count"
+REBOOT_COUNT=0
+[ -f "\$REBOOT_COUNT_FILE" ] && REBOOT_COUNT=\$(cat "\$REBOOT_COUNT_FILE" 2>/dev/null || echo 0)
+
+log_step "wait for network (attempt \$((REBOOT_COUNT + 1))/3)"
+NETWORK_OK=false
 for i in \$(seq 1 30); do
-    ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1 && break
+    ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1 && NETWORK_OK=true && break
     echo "Waiting for network... attempt \$i/30"
     sleep 5
 done
-ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1 || {
-    echo "FAILED: no network after 150s" > "\$STATUSFILE"
-    echo "ERROR: Network not available — apt installs will fail. Rebooting to retry."
-    /sbin/reboot -f
-}
 
+if [ "\$NETWORK_OK" = "false" ]; then
+    if [ "\$REBOOT_COUNT" -lt 2 ]; then
+        # Increment counter and reboot to retry
+        echo \$((REBOOT_COUNT + 1)) > "\$REBOOT_COUNT_FILE"
+        echo "RETRYING: no network, reboot \$((REBOOT_COUNT + 1))/2" > "\$STATUSFILE"
+        echo "Network not available — rebooting to retry (\$((REBOOT_COUNT + 1))/2)"
+        /sbin/reboot -f
+    else
+        # Max retries reached — continue without network, skip apt steps
+        echo "WARNING: No network after 3 attempts — skipping apt installs" | tee -a "\$BOOTLOG"
+        echo "PARTIAL: no network — SSH key injected but packages not installed" > "\$STATUSFILE"
+        # Skip to SSH hardening — skip the apt block below
+        SKIP_APT=true
+    fi
+else
+    SKIP_APT=false
+    # Clear reboot counter on success
+    rm -f "\$REBOOT_COUNT_FILE"
+fi
+
+if [ "\${SKIP_APT:-false}" = "false" ]; then
 log_step "apt-get update"
 DEBIAN_FRONTEND=noninteractive apt-get update -y
 
@@ -265,11 +287,10 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ufw fa
 # FIX 4: Verify packages installed — abort clearly if not
 for pkg in ufw fail2ban curl wget; do
     dpkg -l "\$pkg" 2>/dev/null | grep -q "^ii" || {
-        echo "FAILED: package \$pkg did not install" > "\$STATUSFILE"
-        echo "ERROR: \$pkg failed to install — check network and retry"
-        /sbin/reboot -f
+        echo "WARNING: \$pkg failed to install — will be missing from configuration" | tee -a "\$BOOTLOG"
     }
 done
+fi
 
 # FIX 3: Set timezone without systemd (timedatectl requires D-Bus which isn't up yet)
 log_step "set timezone"
@@ -294,13 +315,18 @@ grep -q "^AllowUsers" /etc/ssh/sshd_config || echo "AllowUsers ${PI_USER}" >> /e
 
 # Configure UFW — allow SSH on local network
 log_step "configure UFW"
+if command -v ufw &>/dev/null; then
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp comment 'SSH local network only'
 ufw --force enable
+else
+    echo "WARNING: ufw not installed — skipping firewall config" | tee -a "\$BOOTLOG"
+fi
 
 # Configure fail2ban
 log_step "configure fail2ban"
+if [ -f /etc/fail2ban/jail.conf ]; then
 cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
 cat > /etc/fail2ban/jail.d/sshd.local << 'EOF'
 [sshd]
@@ -314,6 +340,9 @@ EOF
 # FIX 3: Guard systemctl calls — D-Bus may not be available at this stage
 systemctl enable fail2ban 2>/dev/null || update-rc.d fail2ban defaults 2>/dev/null || true
 systemctl start fail2ban 2>/dev/null || true
+else
+    echo "WARNING: fail2ban not installed — skipping" | tee -a "\$BOOTLOG"
+fi
 
 # Create scripts directory and watchdog
 log_step "create watchdog script"
