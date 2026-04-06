@@ -97,37 +97,49 @@ info "  ssh $NODE_HOSTNAME  → connects to the node via the Pi"
 # =============================================================================
 echo ""
 info "Waiting for $PI_HOST to come online..."
-info "Timeout: 5 minutes. The Pi needs ~90 seconds to boot."
 echo ""
 
-TIMEOUT=300
-ELAPSED=0
-SPINNER=('◐' '◓' '◑' '◒')
-SPIN_IDX=0
+MAX_ATTEMPTS=30
+PING_INTERVAL=10
+ATTEMPT=0
 
-while ! ping -c 1 -W 1 "$PI_HOST" &>/dev/null 2>&1; do
-    SPIN="${SPINNER[$SPIN_IDX]}"
-    SPIN_IDX=$(( (SPIN_IDX + 1) % 4 ))
+echo "  ⏳ Pinging $PI_HOST every ${PING_INTERVAL}s (max ${MAX_ATTEMPTS} attempts = 5 min)"
+echo ""
+
+while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+    ATTEMPT=$((ATTEMPT + 1))
+    ELAPSED=$(( (ATTEMPT - 1) * PING_INTERVAL ))
     MINS=$((ELAPSED / 60))
     SECS=$((ELAPSED % 60))
-    printf "\r  %s  Waiting... %d:%02d elapsed" "$SPIN" "$MINS" "$SECS"
-    sleep 1
-    ELAPSED=$((ELAPSED + 1))
-    if [ $ELAPSED -ge $TIMEOUT ]; then
+    TIMESTAMP=$(printf "%d:%02d" $MINS $SECS)
+
+    # Run ping with short timeout
+    PING_RESULT=$(ping -c 1 -W 2 "$PI_HOST" 2>/dev/null)
+    if echo "$PING_RESULT" | grep -q "1 packets received\|1 received"; then
+        # Extract IP from ping output
+        RESOLVED_IP=$(echo "$PING_RESULT" | grep "PING" | grep -oE '\(([0-9.]+)\)' | tr -d '()')
+        printf "  [%02d/%02d] %s — ✅ online! %s\n" "$ATTEMPT" "$MAX_ATTEMPTS" "$TIMESTAMP" "${RESOLVED_IP:+($RESOLVED_IP)}"
         echo ""
-        error "Timeout — $PI_HOST did not respond after 5 minutes.
+        success "$PI_HOST is reachable"
+        break
+    else
+        printf "  [%02d/%02d] %s — no response\n" "$ATTEMPT" "$MAX_ATTEMPTS" "$TIMESTAMP"
+    fi
+
+    if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+        sleep $PING_INTERVAL
+    fi
+done
+
+if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
+    echo ""
+    error "Timeout — $PI_HOST did not respond after 5 minutes.
     Check that:
     - The SD card is properly inserted in the Pi
     - The Pi is connected to Ethernet (same network as this Mac)
     - The Pi is powered on
     Then run this script again."
-    fi
-done
-
-MINS=$((ELAPSED / 60))
-SECS=$((ELAPSED % 60))
-echo ""
-success "$PI_HOST is online! (responded after ${MINS}m ${SECS}s)"
+fi
 
 # =============================================================================
 # STEP 3: Test SSH connection
@@ -159,30 +171,37 @@ fi
 # =============================================================================
 echo ""
 info "Checking first-run hardening status..."
+echo ""
 
-HARDENING_TIMEOUT=300
-HARDENING_ELAPSED=0
-SPIN_IDX=0
+HARDENING_MAX=24   # 24 x 5s = 2 minutes
+HARDENING_ATTEMPT=0
 
-while ! ssh -o ConnectTimeout=5 "$PI_HOSTNAME" \
-    "grep -q 'First-run hardening complete' /var/log/firstrun.log 2>/dev/null" 2>/dev/null; do
-    SPIN="${SPINNER[$SPIN_IDX]}"
-    SPIN_IDX=$(( (SPIN_IDX + 1) % 4 ))
-    MINS=$((HARDENING_ELAPSED / 60))
-    SECS=$((HARDENING_ELAPSED % 60))
-    printf "\r  %s  Hardening in progress... %d:%02d elapsed" "$SPIN" "$MINS" "$SECS"
-    sleep 5
-    HARDENING_ELAPSED=$((HARDENING_ELAPSED + 5))
-    if [ $HARDENING_ELAPSED -ge $HARDENING_TIMEOUT ]; then
+echo "  ⏳ Polling for hardening completion every 5s (max 2 min)"
+echo ""
+
+while [ $HARDENING_ATTEMPT -lt $HARDENING_MAX ]; do
+    HARDENING_ATTEMPT=$((HARDENING_ATTEMPT + 1))
+    ELAPSED=$(( (HARDENING_ATTEMPT - 1) * 5 ))
+    MINS=$((ELAPSED / 60))
+    SECS=$((ELAPSED % 60))
+    TIMESTAMP=$(printf "%d:%02d" $MINS $SECS)
+
+    if ssh -o ConnectTimeout=5 "$PI_HOSTNAME" \
+        "grep -q 'First-run hardening complete' /var/log/firstrun.log 2>/dev/null" 2>/dev/null; then
+        printf "  [%02d/%02d] %s — ✅ hardening complete\n" "$HARDENING_ATTEMPT" "$HARDENING_MAX" "$TIMESTAMP"
         echo ""
-        warn "Hardening is taking longer than expected."
-        warn "Check the log on the Pi: ssh $PI_HOSTNAME 'tail -20 /var/log/firstrun.log'"
         break
+    else
+        printf "  [%02d/%02d] %s — still running...\n" "$HARDENING_ATTEMPT" "$HARDENING_MAX" "$TIMESTAMP"
+        sleep 5
     fi
 done
 
-echo ""
-success "First-run hardening complete"
+if [ $HARDENING_ATTEMPT -ge $HARDENING_MAX ]; then
+    echo ""
+    warn "Hardening is taking longer than expected."
+    warn "Check the log: ssh $PI_HOSTNAME 'tail -20 /var/log/firstrun.log'"
+fi
 
 # =============================================================================
 # STEP 5: Done
