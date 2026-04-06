@@ -50,22 +50,22 @@ Update status as each phase completes. Kiro uses this to know where to continue.
 
 | Phase | Description | Status | Date | Notes |
 |---|---|---|---|---|
-| 0b | Jump host — Pi flash + SSH setup | ⬜ | | |
-| 0 | Hardware prep — BIOS flash | ⬜ | | |
-| 1 | Ubuntu install | ⬜ | | |
-| 2 | First boot + SSH handoff | ⬜ | | |
-| 3 | Security hardening | ⬜ | | |
-| 4 | Storage configuration | ⬜ | | |
-| 5 | Docker install | ⬜ | | |
-| 6 | Smartnode install | ⬜ | | |
-| 7 | Testnet configuration | ⬜ | | |
-| 7.5 | Testnet validator creation | ⬜ | | |
-| 8 | Testnet validation + metrics | ⬜ | | |
-| 9 | Mainnet queue deposit | ⬜ | | |
-| 10 | Parallel testnet operation | ⬜ | | |
-| 11 | Mainnet transition | ⬜ | | |
+| 0b | Jump host — Pi flash + SSH setup | ○ | | |
+| 0 | Hardware prep — BIOS flash | ○ | | |
+| 1 | Ubuntu install | ○ | | |
+| 2 | First boot + SSH handoff | ○ | | |
+| 3 | Security hardening | ○ | | |
+| 4 | Storage configuration | ○ | | |
+| 5 | Docker install | ○ | | |
+| 6 | Smartnode install | ○ | | |
+| 7 | Testnet configuration | ○ | | |
+| 7.5 | Testnet validator creation | ○ | | |
+| 8 | Testnet validation + metrics | ○ | | |
+| 9 | Mainnet queue deposit | ○ | | |
+| 10 | Parallel testnet operation | ○ | | |
+| 11 | Mainnet transition | ○ | | |
 
-*Status: ⬜ not started · 🔄 in progress · ✅ complete · ⚠️ blocked*
+*Status: ○ not started · ↻ in progress · ✓ complete · ! blocked*
 
 ---
 

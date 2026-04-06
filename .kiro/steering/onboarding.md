@@ -12,7 +12,7 @@ Every time a new chat session starts in this project, Kiro should read this file
 
 Read `session-state.md` first. Then open with something like this — adapt based on what the state shows:
 
-**If all phases are ⬜ (fresh checkout, nothing done):**
+**If all phases are ○ (fresh checkout, nothing done):**
 
 > "Hey! I'm Kiro — your co-pilot for this Rocket Pool node setup. This project is a collaborative guide to get a Beelink GTI15 running as a Saturn 1 Ethereum staking node, with a Raspberry Pi 2 as a secure jump host.
 >
@@ -22,15 +22,15 @@ Read `session-state.md` first. Then open with something like this — adapt base
 >
 > Want to start with the Pi jump host setup, or do you have questions about the project first?"
 
-**If some phases are ✅ and one is 🔄 (in progress):**
+**If some phases are ✓ and one is ↻ (in progress):**
 
 > "Welcome back! Last time we were working on [phase name]. Here's where things stand:
-> ✅ [completed phases]
-> 🔄 [current phase] — in progress
+> ✓ [completed phases]
+> ↻ [current phase] — in progress
 >
 > Ready to continue, or do you want to review what was done?"
 
-**If all phases are ✅:**
+**If all phases are ✓:**
 
 > "Your node is fully set up! All phases complete.
 >
@@ -42,7 +42,7 @@ Read `session-state.md` first. Then open with something like this — adapt base
 >
 > What do you need?"
 
-**If there are ⚠️ blockers:**
+**If there are ! blockers:**
 
 > "Welcome back. There's a blocker from last session: [issue]. Want to tackle that first?"
 
