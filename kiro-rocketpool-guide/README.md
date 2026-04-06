@@ -35,7 +35,8 @@ That's the model: you bring the goal and the judgment, Kiro brings the research 
 |---|---|---|
 | [00-prerequisites.md](./00-prerequisites.md) | What you need before starting | 5 min read |
 | [00b-jump-host-setup.md](./00b-jump-host-setup.md) | Jump host: Raspberry Pi 2 setup + hardening | 45 min |
-| [scripts/flash-jumphost.sh](./scripts/flash-jumphost.sh) | Automated SD card flash script (run on Mac) | 10 min |
+| [scripts/flash-jumphost.sh](./scripts/flash-jumphost.sh) | Automated SD card flash script (run on Mac) |
+| [scripts/setup-mac-ssh.sh.template](./scripts/setup-mac-ssh.sh.template) | Template for post-boot Mac SSH setup (generated at runtime) | 10 min |
 | [01-hardware-prep.md](./01-hardware-prep.md) | Phase 0: BIOS flash, WD firmware | 45 min |
 | [02-os-install.md](./02-os-install.md) | Phase 1–2: Ubuntu install + SSH handoff | 45 min |
 

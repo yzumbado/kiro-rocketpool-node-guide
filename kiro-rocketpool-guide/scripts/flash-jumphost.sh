@@ -33,17 +33,17 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
-success() { echo -e "${GREEN}[OK]${NC} $1"; }
-warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
-error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
-ask()     { echo -e "${YELLOW}[INPUT]${NC} $1"; }
+info()    { echo -e "  ${BLUE}ℹ️  $1${NC}"; }
+success() { echo -e "  ${GREEN}✅ $1${NC}"; }
+warn()    { echo -e "  ${YELLOW}⚠️  $1${NC}"; }
+error()   { echo -e "  ${RED}❌ $1${NC}"; exit 1; }
+ask()     { echo -e "  ${YELLOW}❓ $1${NC}"; }
 
 echo ""
-echo "=============================================="
-echo "  Rocket Pool Jump Host — SD Card Flash Tool"
-echo "  Raspberry Pi 2 · Raspberry Pi OS Lite 32-bit"
-echo "=============================================="
+echo "╔══════════════════════════════════════════════════╗"
+echo "║  🚀 Rocket Pool Jump Host Flash Tool             ║"
+echo "║  Raspberry Pi 2 · Raspberry Pi OS Lite 32-bit   ║"
+echo "╚══════════════════════════════════════════════════╝"
 echo ""
 
 # =============================================================================
@@ -334,34 +334,30 @@ chmod +x "$FIRSTRUN_SCRIPT"
 # STEP 6: Confirmation summary
 # =============================================================================
 echo ""
-echo "=============================================="
-echo "  CONFIGURATION SUMMARY — Review before flash"
-echo "=============================================="
-echo ""
-echo "  Pi hostname:      $HOSTNAME"
-echo "  Pi username:      $PI_USER"
-echo "  Pi password:      [set]"
-echo "  Timezone:         $TIMEZONE"
-echo "  Pi static IP:     ${PI_IP:-[not set — using ${HOSTNAME}.local]}"
-echo "  Node host:        ${NODE_IP:-[not set — using ${NODE_HOSTNAME}.local]}"
-echo "  SSH key (Mac→Pi): $JUMPHOST_PUB"
-echo "  Watchdog webhook: ${WEBHOOK_URL:-[not set]}"
-echo ""
-echo "  Target device:    $SD_DEVICE"
-echo "  Device name:      $SD_NAME"
-echo "  Device size:      $SD_SIZE"
-echo ""
-echo "  First-run script will:"
-echo "    ✓ Update all packages"
-echo "    ✓ Install ufw, fail2ban, curl, wget"
-echo "    ✓ Inject your SSH public key"
-echo "    ✓ Disable password SSH auth"
-echo "    ✓ Configure UFW (SSH local subnet only)"
-echo "    ✓ Configure fail2ban (3 retries, 24h ban)"
-echo "    ✓ Install watchdog cron (every 15 min)"
-echo "    ✓ Pre-configure SSH client for rp-node01"
-echo ""
-echo "=============================================="
+echo "╔══════════════════════════════════════════════════╗"
+echo "║           CONFIGURATION SUMMARY                 ║"
+echo "╠══════════════════════════════════════════════════╣"
+printf "║  🖥️  %-12s  %-30s║\n" "Pi hostname"  "$HOSTNAME"
+printf "║  👤 %-12s  %-30s║\n" "Pi username"  "$PI_USER"
+printf "║  🌍 %-12s  %-30s║\n" "Timezone"     "$TIMEZONE"
+printf "║  🌐 %-12s  %-30s║\n" "Pi address"   "${PI_IP:-${HOSTNAME}.local}"
+printf "║  🌐 %-12s  %-30s║\n" "Node address" "${NODE_IP:-${NODE_HOSTNAME}.local}"
+printf "║  🔑 %-12s  %-30s║\n" "SSH key"      "~/.ssh/id_ed25519_${HOSTNAME}"
+printf "║  🔔 %-12s  %-30s║\n" "Webhook"      "${WEBHOOK_URL:-[not set]}"
+echo "╠══════════════════════════════════════════════════╣"
+printf "║  💾 %-12s  %-30s║\n" "Target"       "$SD_DEVICE"
+printf "║  📦 %-12s  %-30s║\n" "Device"       "$SD_NAME"
+printf "║  📏 %-12s  %-30s║\n" "Size"         "$SD_SIZE"
+echo "╠══════════════════════════════════════════════════╣"
+echo "║  First-run script will:                         ║"
+echo "║    ✓ Update all packages                        ║"
+echo "║    ✓ Install ufw, fail2ban, curl, wget          ║"
+echo "║    ✓ Inject your SSH public key                 ║"
+echo "║    ✓ Disable password SSH auth                  ║"
+echo "║    ✓ Configure UFW + fail2ban                   ║"
+echo "║    ✓ Install watchdog cron (every 15 min)       ║"
+echo "║    ✓ Pre-configure SSH client for node          ║"
+echo "╚══════════════════════════════════════════════════╝"
 echo ""
 warn "THIS WILL ERASE ALL DATA ON $SD_DEVICE ($SD_NAME)"
 echo ""
@@ -457,7 +453,7 @@ IMAGE_SIZE_MB=$((IMAGE_SIZE / 1024 / 1024))
 info "Image size: ${IMAGE_SIZE_MB}MB"
 
 if command -v pv &>/dev/null; then
-    pv -s "$IMAGE_SIZE" "$OS_IMG" | sudo dd of="$RAW_DEVICE" bs=4m
+    pv -s "$IMAGE_SIZE" -N "  🚀 Flashing SD card" "$OS_IMG" | sudo dd of="$RAW_DEVICE" bs=4m
 else
     info "Progress updates every 5 seconds..."
     sudo dd if="$OS_IMG" of="$RAW_DEVICE" bs=4m status=progress
@@ -511,51 +507,67 @@ fi
 # =============================================================================
 # STEP 9: Done
 # =============================================================================
+# =============================================================================
+# STEP 9: Generate setup-mac-ssh.sh and run post-flash flow
+# =============================================================================
 rm -f "$FIRSTRUN_SCRIPT"
 
-echo ""
-echo "=============================================="
-success "Flash complete!"
-echo "=============================================="
-echo ""
-echo "Next steps:"
-echo ""
+# Generate setup-mac-ssh.sh from template
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATE="$SCRIPT_DIR/setup-mac-ssh.sh.template"
+SETUP_SCRIPT="$SCRIPT_DIR/setup-mac-ssh.sh"
 
-# Step 1 — differs based on whether static IP was configured
-if [ -n "$PI_IP" ]; then
-    echo "  1. Set DHCP reservation in your router:"
-    echo "       Assign IP $PI_IP to the Pi's MAC address."
-    echo "       Find the MAC in your router's connected devices list after first boot."
+if [ -f "$TEMPLATE" ]; then
+    info "Generating setup-mac-ssh.sh from template..."
+    sed \
+        -e "s|{{HOSTNAME}}|${HOSTNAME}|g" \
+        -e "s|{{PI_HOST}}|${PI_HOST}|g" \
+        -e "s|{{PI_USER}}|${PI_USER}|g" \
+        -e "s|{{JUMPHOST_KEY}}|${JUMPHOST_KEY}|g" \
+        -e "s|{{NODE_HOSTNAME}}|${NODE_HOSTNAME}|g" \
+        -e "s|{{NODE_HOST}}|${NODE_HOST}|g" \
+        "$TEMPLATE" > "$SETUP_SCRIPT"
+    chmod +x "$SETUP_SCRIPT"
+    success "Generated: $SETUP_SCRIPT"
 else
-    echo "  1. No router configuration needed."
-    echo "       Your Pi will be reachable at ${HOSTNAME}.local via mDNS."
+    warn "Template not found — skipping setup-mac-ssh.sh generation"
 fi
 
+# Eject SD card
 echo ""
-echo "  2. Insert SD card into Pi 2, connect Ethernet, power on"
-echo "     Wait ~3 minutes for first boot + hardening to complete"
-echo ""
-echo "  3. Test SSH from your Mac:"
-echo "       ssh -i $JUMPHOST_KEY ${PI_USER}@${PI_HOST}"
-echo ""
-echo "  4. Once logged in, generate the node SSH key:"
-echo "       ssh-keygen -t ed25519 -C '${NODE_HOSTNAME}-access' -f ~/.ssh/rp_node_key"
-echo ""
-echo "  5. Add Mac SSH config entry:"
-cat << SSHCONFIG
-       # Add to ~/.ssh/config on your Mac:
-       Host $HOSTNAME
-           HostName $PI_HOST
-           User $PI_USER
-           IdentityFile $JUMPHOST_KEY
-           ServerAliveInterval 60
+info "Ejecting SD card..."
+diskutil eject "$SD_DEVICE" 2>/dev/null && success "SD card ejected safely" || \
+    warn "Could not auto-eject — please eject manually from Finder"
 
-       Host $NODE_HOSTNAME
-           HostName $NODE_HOST
-           User nodeop
-           ProxyJump $HOSTNAME
-           IdentityFile /dev/null
-SSHCONFIG
+# Physical instructions
 echo ""
-echo "  Then continue with 01-hardware-prep.md"
+echo "╔══════════════════════════════════════════════════╗"
+echo "║  📋 Physical Setup Instructions                  ║"
+echo "╚══════════════════════════════════════════════════╝"
 echo ""
+echo "  1️⃣  Remove the SD card from your Mac"
+echo "  2️⃣  Insert it into the Raspberry Pi 2 (underside slot)"
+echo "  3️⃣  Connect an Ethernet cable from the Pi to your router"
+echo "  4️⃣  Connect the Pi to power (Micro USB)"
+echo ""
+echo "  The Pi will boot and run the hardening script automatically."
+echo "  This takes ~3 minutes on first boot."
+echo ""
+ask "Press Enter when the Pi is powered on and connected..."
+read -r
+
+# Run setup-mac-ssh.sh automatically
+if [ -f "$SETUP_SCRIPT" ]; then
+    echo ""
+    info "Starting post-boot setup..."
+    bash "$SETUP_SCRIPT"
+else
+    echo ""
+    echo "╔══════════════════════════════════════════════════╗"
+    echo "║  ✅ Flash complete! SD card is ready.            ║"
+    echo "╚══════════════════════════════════════════════════╝"
+    echo ""
+    echo "  ➡️  Run setup-mac-ssh.sh after the Pi boots"
+    echo "  ➡️  Then continue with 01-hardware-prep.md"
+    echo ""
+fi

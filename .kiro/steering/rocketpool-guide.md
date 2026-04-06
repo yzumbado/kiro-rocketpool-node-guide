@@ -35,7 +35,9 @@ HANDOFF.md                 Agent entry point — bootstrap check + execution ord
 08-mainnet-transition.md   Phase 11: Go-live checklist
 09-appendix.md             Troubleshooting, maintenance, emergency, RPL staking
 10-pending-improvements.md Deferred improvements: static IPs, UPS, backups, external access
-scripts/flash-jumphost.sh  Automated SD card flash script for the Pi (run on Mac)
+scripts/flash-jumphost.sh              Automated SD card flash script for the Pi (run on Mac)
+scripts/setup-mac-ssh.sh.template      Source-of-truth template for post-boot Mac SSH setup
+scripts/setup-mac-ssh.sh               Generated at runtime by flash-jumphost.sh (gitignored)
 yoel-notes.md              Operator installation tracker — personal notes, fill in during setup
 ```
 
@@ -177,7 +179,9 @@ Terminal-comfortable but not necessarily a Linux expert. The guide should also b
 - Guide is complete through all 11 phases + appendices + jump host setup + pending improvements
 - All content validated against: Ubuntu 24.04.4 installer behavior (kernel 6.8 on first boot, 6.17 after HWE install), Hoodi testnet checkpoint sync URLs, Smartnode v1.19.4 release notes, Saturn 1 launch (Feb 18 2026)
 - `.local` mDNS hostnames used throughout — static IPs deferred to `10-pending-improvements.md`
-- Pi flash script (`scripts/flash-jumphost.sh`) automates SD card flash + first-boot hardening. Install rpi-imager with `brew install --cask raspberry-pi-imager`. The CLI binary is at `/Applications/Raspberry\ Pi\ Imager.app/Contents/MacOS/rpi-imager` — the script handles this path automatically.
+- Pi flash script (`scripts/flash-jumphost.sh`) automates SD card flash + first-boot hardening + post-boot SSH setup. Install rpi-imager with `brew install --cask raspberry-pi-imager` and pv with `brew install pv`. The script generates `setup-mac-ssh.sh` at runtime from `setup-mac-ssh.sh.template`.
+- `setup-mac-ssh.sh.template` is the source of truth for post-boot Mac SSH setup. The generated `setup-mac-ssh.sh` is gitignored (contains user-specific values).
+- Post-flash flow: auto-eject → physical instructions → animated ping loop → SSH config write → connection test → hardening completion poll → ready confirmation.
 - `yoel-notes.md` is the operator's personal installation tracker — fill in during setup
 - UFW on the Pi currently allows SSH on port 22 broadly. Tightening to subnet-only is pending improvement #2 (requires static IPs first)
 

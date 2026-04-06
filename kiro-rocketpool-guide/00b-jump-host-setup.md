@@ -84,19 +84,88 @@ chmod +x flash-jumphost.sh
 
 The script will:
 1. Ask for hostname, username, password, timezone, IPs, and optional webhook URL
-2. Auto-detect or generate your Mac → Pi SSH key
+2. Auto-detect or generate your Mac → Pi SSH key (named `~/.ssh/id_ed25519_<hostname>`)
 3. List your disks and ask you to identify the SD card
 4. Show a full confirmation summary before touching anything
 5. Flash Raspberry Pi OS Lite (32-bit) with all settings pre-configured
-6. Inject a first-run script that runs on first boot and:
-   - Updates all packages
-   - Installs ufw, fail2ban, curl, wget
-   - Injects your SSH public key
-   - Disables password SSH auth
-   - Configures UFW (SSH restricted to local subnet)
-   - Configures fail2ban (3 retries, 24h ban)
-   - Installs the watchdog cron
-   - Pre-configures SSH client for `rp-node01`
+6. Inject a first-run script that runs on first boot and hardens the Pi automatically
+7. Eject the SD card
+8. Walk you through physical setup with clear instructions
+9. Wait for you to power on the Pi, then automatically:
+   - Ping the Pi with an animated progress indicator until it responds
+   - Write your `~/.ssh/config` entries for `ssh <hostname>` and `ssh <node>`
+   - Test the SSH connection
+   - Wait for first-run hardening to complete
+   - Confirm the Pi is ready
+
+**Example session:**
+
+```
+╔══════════════════════════════════════════════════╗
+║  🚀 Rocket Pool Jump Host Flash Tool             ║
+║  Raspberry Pi 2 · Raspberry Pi OS Lite 32-bit   ║
+╚══════════════════════════════════════════════════╝
+
+  ❓ Pi hostname [default: pi-jumphost]: pi-client
+  ❓ Pi username [default: piop]:
+  ❓ Pi password: ****
+  ❓ Timezone [default: UTC]:
+  ❓ Pi static IP (or Enter to skip):
+  ❓ Node hostname [default: rp-node01]:
+  ❓ Node static IP (or Enter to skip):
+  ❓ Discord webhook URL (or Enter to skip):
+
+╔══════════════════════════════════════════════════╗
+║           CONFIGURATION SUMMARY                 ║
+╠══════════════════════════════════════════════════╣
+║  🖥️  Pi hostname    pi-client                   ║
+║  👤 Pi username    piop                         ║
+║  🌐 Pi address     pi-client.local              ║
+║  🔑 SSH key        ~/.ssh/id_ed25519_pi-client  ║
+╠══════════════════════════════════════════════════╣
+║  💾 Target         /dev/disk4                   ║
+║  📏 Size           31.6 GB                      ║
+╚══════════════════════════════════════════════════╝
+
+  ⚠️  THIS WILL ERASE ALL DATA ON /dev/disk4
+  ❓ Type YES to confirm: YES
+
+  🚀 Flashing SD card: 1.92GiB 94% [=============>  ] 17.2MiB/s ETA 0:00:07
+
+  ✅ Flash complete! SD card is ready.
+
+╔══════════════════════════════════════════════════╗
+║  📋 Physical Setup Instructions                  ║
+╚══════════════════════════════════════════════════╝
+
+  1️⃣  Remove the SD card from your Mac
+  2️⃣  Insert it into the Raspberry Pi 2
+  3️⃣  Connect Ethernet cable to your router
+  4️⃣  Connect power (Micro USB)
+
+  ❓ Press Enter when the Pi is powered on...
+
+  ⏳ Waiting for pi-client.local to come online (timeout: 5 min)...
+  ◐  Waiting... 0:47 elapsed
+  ✅ pi-client.local is online! (responded after 1m 12s)
+
+  ✅ SSH connection successful
+
+  ◐  Hardening in progress... 1:30 elapsed
+  ✅ First-run hardening complete
+
+╔══════════════════════════════════════════════════╗
+║  ✅ Pi is ready!                                 ║
+╚══════════════════════════════════════════════════╝
+
+  Connect to the Pi:   ssh pi-client
+  Connect to the node: ssh rp-node01  (after node setup)
+
+  ➡️  Next: generate the node SSH key on the Pi
+  ➡️  Then continue with 01-hardware-prep.md
+```
+
+A companion script `setup-mac-ssh.sh` is also generated in the `scripts/` folder — run it any time to re-configure your Mac SSH settings for this Pi.
 
 > ⚠️ **Warning:** When the script asks for the SD card device, use the whole disk (e.g. `/dev/disk4`) not a partition (e.g. `/dev/disk4s1`). The script validates this but double-check — wrong device erases the wrong disk.
 

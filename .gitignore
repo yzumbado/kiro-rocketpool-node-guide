@@ -12,10 +12,8 @@ downloads/
 *.img.xz
 *.deb
 
-# Temporary files
-*.tmp
-*.log
-/tmp/
+# Generated scripts (contain user-specific paths and values)
+kiro-rocketpool-guide/scripts/setup-mac-ssh.sh
 
 # Editor
 .vscode/

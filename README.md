@@ -76,6 +76,7 @@ kiro-rocketpool-guide/             ← The complete guide
 | [09-appendix.md](./kiro-rocketpool-guide/09-appendix.md) | Troubleshooting, maintenance, RPL staking |
 | [10-pending-improvements.md](./kiro-rocketpool-guide/10-pending-improvements.md) | Deferred improvements tracker |
 | [scripts/flash-jumphost.sh](./kiro-rocketpool-guide/scripts/flash-jumphost.sh) | Automated Pi SD card flash script |
+| [scripts/setup-mac-ssh.sh.template](./kiro-rocketpool-guide/scripts/setup-mac-ssh.sh.template) | Template for post-boot Mac SSH setup (generated at runtime) |
 
 The original source guides that informed this work are also included at the root — see [SOURCES.md](./SOURCES.md) for context.
 
