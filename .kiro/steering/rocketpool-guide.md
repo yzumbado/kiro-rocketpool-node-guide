@@ -206,3 +206,5 @@ Terminal-comfortable but not necessarily a Linux expert. The guide should also b
 | `session-state.md` | Current phase progress, setup values, blockers, session log | Always |
 | `onboarding.md` | How to open every session — greeting templates based on state | Always |
 | `persona.md` | How Kiro presents itself — tone, behavior, what to proactively surface | Always |
+| `execution-mode.md` | How Kiro narrates and executes phases — full breakdown per step | Always |
+| `kiro-dev.md` | How Kiro collaborates with the guide maintainer — development conventions, commit discipline, research standards | Always |
