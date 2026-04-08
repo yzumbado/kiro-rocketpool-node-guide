@@ -53,3 +53,13 @@ For phase progress see `session-state.md`.
 3. Update the session log in `session-state.md`
 
 **Pruning:** Move items older than 2 weeks from "Recently Completed" to the git history (they're captured in commits). Keep this file focused on current work.
+
+---
+
+## Developer Session Log
+
+*Notes from Kiro Dev sessions — what was built, what was decided, what changed.*
+
+| Date | Summary |
+|---|---|
+| Apr 2026 | Major architecture refactor: removed firstrun.sh from flash process. Flash now minimal (userconf.txt + ssh file only). All hardening moved to harden-pi.sh which runs over SSH after boot. Created SECURITY-AUDIT.md, kiro-dev.md, TASKS.md. Fixed 12 backlog issues from code review. Established three-tier task tracking system. |
