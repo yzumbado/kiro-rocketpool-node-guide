@@ -207,219 +207,11 @@ if [ -n "$SD_SIZE_BYTES" ] && [ "$SD_SIZE_BYTES" -lt "$MIN_SIZE_BYTES" ]; then
 fi
 
 # =============================================================================
-# STEP 5: Build the first-run hardening script
+# STEP 5: No first-run script needed
+# All hardening is done by the agent over SSH after the Pi boots.
+# The flash only needs to get SSH working.
 # =============================================================================
-FIRSTRUN_SCRIPT=$(mktemp /tmp/pi-firstrun-XXXXXX.sh)
-
-cat > "$FIRSTRUN_SCRIPT" << FIRSTRUN
-#!/bin/bash
-# First-run hardening script — injected by flash-jumphost.sh
-# Runs once on first boot as root, then deletes itself
-# Logs to /var/log/firstrun.log AND /boot/firmware/firstrun-debug.log (readable from Mac)
-
-# Enable verbose logging for debugging — do NOT use set -e (causes silent exits)
-set -x
-
-# Dual logging — both to system log and to boot partition (readable from Mac without booting)
-SYSLOG="/var/log/firstrun.log"
-BOOTLOG="/boot/firmware/firstrun-debug.log"
-STATUSFILE="/boot/firmware/firstrun-status.txt"
-
-log_step() {
-    echo "[\$(date '+%H:%M:%S')] STEP: \$1" | tee -a "\$SYSLOG" "\$BOOTLOG"
-    echo "STEP: \$1 [\$(date)]" > "\$STATUSFILE"
-}
-
-exec > >(tee -a "\$SYSLOG" "\$BOOTLOG") 2>&1
-echo "STARTED [\$(date)]" > "\$STATUSFILE"
-echo "=== First-run hardening started: \$(date) ===" | tee "\$BOOTLOG"
-
-# FIX 2: Ensure user exists before any user-dependent operations
-# userconf.txt creates the user during the Pi OS wizard which may not have run yet
-log_step "ensure user exists"
-id -u ${PI_USER} &>/dev/null || useradd -m -s /bin/bash ${PI_USER}
-
-# FIX 1: Wait for network before any apt calls
-# systemd.run= fires before networking is fully up on Pi 2
-# Use a reboot counter to prevent infinite reboot loops
-REBOOT_COUNT_FILE="/boot/firmware/firstrun-reboot-count"
-REBOOT_COUNT=0
-[ -f "\$REBOOT_COUNT_FILE" ] && REBOOT_COUNT=\$(cat "\$REBOOT_COUNT_FILE" 2>/dev/null || echo 0)
-
-log_step "wait for network (attempt \$((REBOOT_COUNT + 1))/3)"
-NETWORK_OK=false
-for i in \$(seq 1 30); do
-    ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1 && NETWORK_OK=true && break
-    echo "Waiting for network... attempt \$i/30"
-    sleep 5
-done
-
-if [ "\$NETWORK_OK" = "false" ]; then
-    if [ "\$REBOOT_COUNT" -lt 2 ]; then
-        # Increment counter and reboot to retry
-        echo \$((REBOOT_COUNT + 1)) > "\$REBOOT_COUNT_FILE"
-        echo "RETRYING: no network, reboot \$((REBOOT_COUNT + 1))/2" > "\$STATUSFILE"
-        echo "Network not available — rebooting to retry (\$((REBOOT_COUNT + 1))/2)"
-        /sbin/reboot -f
-    else
-        # Max retries reached — continue without network, skip apt steps
-        echo "WARNING: No network after 3 attempts — skipping apt installs" | tee -a "\$BOOTLOG"
-        echo "PARTIAL: no network — SSH key injected but packages not installed" > "\$STATUSFILE"
-        # Skip to SSH hardening — skip the apt block below
-        SKIP_APT=true
-    fi
-else
-    SKIP_APT=false
-    # Clear reboot counter on success
-    rm -f "\$REBOOT_COUNT_FILE"
-fi
-
-if [ "\${SKIP_APT:-false}" = "false" ]; then
-log_step "apt-get update"
-DEBIAN_FRONTEND=noninteractive apt-get update -y
-
-log_step "apt-get upgrade"
-DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
-
-log_step "install packages"
-DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ufw fail2ban curl wget
-
-# FIX 4: Verify packages installed — abort clearly if not
-for pkg in ufw fail2ban curl wget; do
-    dpkg -l "\$pkg" 2>/dev/null | grep -q "^ii" || {
-        echo "WARNING: \$pkg failed to install — will be missing from configuration" | tee -a "\$BOOTLOG"
-    }
-done
-fi
-
-# FIX 3: Set timezone without systemd (timedatectl requires D-Bus which isn't up yet)
-log_step "set timezone"
-ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
-echo "${TIMEZONE}" > /etc/timezone
-
-# Install SSH public key for Mac → Pi access
-log_step "install SSH public key"
-mkdir -p /home/${PI_USER}/.ssh
-chmod 700 /home/${PI_USER}/.ssh
-echo "${MAC_PUBKEY}" >> /home/${PI_USER}/.ssh/authorized_keys
-chmod 600 /home/${PI_USER}/.ssh/authorized_keys
-chown -R ${PI_USER}:${PI_USER} /home/${PI_USER}/.ssh
-
-# Harden SSH daemon
-log_step "harden SSH daemon"
-cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
-sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-sed -i 's/^#*KbdInteractiveAuthentication.*/KbdInteractiveAuthentication no/' /etc/ssh/sshd_config
-grep -q "^AllowUsers" /etc/ssh/sshd_config || echo "AllowUsers ${PI_USER}" >> /etc/ssh/sshd_config
-
-# Configure UFW — allow SSH on local network
-log_step "configure UFW"
-if command -v ufw &>/dev/null; then
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow 22/tcp comment 'SSH local network only'
-ufw --force enable
-else
-    echo "WARNING: ufw not installed — skipping firewall config" | tee -a "\$BOOTLOG"
-fi
-
-# Configure fail2ban
-log_step "configure fail2ban"
-if [ -f /etc/fail2ban/jail.conf ]; then
-cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
-cat > /etc/fail2ban/jail.d/sshd.local << 'EOF'
-[sshd]
-enabled = true
-port    = ssh
-logpath = %(sshd_log)s
-backend = %(sshd_backend)s
-maxretry = 3
-bantime = 24h
-EOF
-# FIX 3: Guard systemctl calls — D-Bus may not be available at this stage
-systemctl enable fail2ban 2>/dev/null || update-rc.d fail2ban defaults 2>/dev/null || true
-systemctl start fail2ban 2>/dev/null || true
-else
-    echo "WARNING: fail2ban not installed — skipping" | tee -a "\$BOOTLOG"
-fi
-
-# Create scripts directory and watchdog
-log_step "create watchdog script"
-mkdir -p /home/${PI_USER}/scripts
-
-cat > /home/${PI_USER}/scripts/node-watchdog.sh << WATCHDOG
-#!/bin/bash
-NODE_HOST="${NODE_HOSTNAME}"
-WEBHOOK_URL="${WEBHOOK_URL}"
-ALERT_COOLDOWN=3600
-ALERT_FILE="/tmp/watchdog_last_alert"
-ISSUES=()
-
-if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "\$NODE_HOST" exit 2>/dev/null; then
-    ISSUES+=("Node SSH unreachable")
-fi
-
-if [ \${#ISSUES[@]} -eq 0 ]; then
-    CONTAINER_COUNT=\$(ssh "\$NODE_HOST" "docker ps | grep -c rocketpool" 2>/dev/null)
-    if [ "\${CONTAINER_COUNT:-0}" -lt 5 ]; then
-        ISSUES+=("Only \$CONTAINER_COUNT/5+ Rocket Pool containers running")
-    fi
-fi
-
-if [ \${#ISSUES[@]} -eq 0 ]; then
-    DISK_USED=\$(ssh "\$NODE_HOST" "df /mnt/ssd | awk 'NR==2{print \\\$5}' | tr -d '%'" 2>/dev/null)
-    if [ "\${DISK_USED:-0}" -gt 85 ]; then
-        ISSUES+=("Node disk at \${DISK_USED}% — action needed")
-    fi
-fi
-
-if [ \${#ISSUES[@]} -gt 0 ] && [ -n "\$WEBHOOK_URL" ]; then
-    LAST_ALERT=\$(cat "\$ALERT_FILE" 2>/dev/null || echo 0)
-    NOW=\$(date +%s)
-    if [ \$((NOW - LAST_ALERT)) -gt \$ALERT_COOLDOWN ]; then
-        MESSAGE="rp-node01 Alert \$(date): \$(printf '%s ' "\${ISSUES[@]}")"
-        curl -s -X POST "\$WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d "{\"content\": \"\$MESSAGE\"}" > /dev/null
-        echo "\$NOW" > "\$ALERT_FILE"
-    fi
-fi
-WATCHDOG
-
-chmod +x /home/${PI_USER}/scripts/node-watchdog.sh
-chown -R ${PI_USER}:${PI_USER} /home/${PI_USER}/scripts
-
-# Schedule watchdog cron
-(crontab -u ${PI_USER} -l 2>/dev/null; \
-  echo "*/15 * * * * /home/${PI_USER}/scripts/node-watchdog.sh >> /home/${PI_USER}/scripts/watchdog.log 2>&1") \
-  | crontab -u ${PI_USER} -
-
-log_step "configure SSH client"
-mkdir -p /home/${PI_USER}/.ssh
-grep -q "Host ${NODE_HOSTNAME}" /home/${PI_USER}/.ssh/config 2>/dev/null || cat >> /home/${PI_USER}/.ssh/config << EOF
-Host ${NODE_HOSTNAME}
-    HostName ${NODE_HOST}
-    User nodeop
-    IdentityFile /home/${PI_USER}/.ssh/rp_node_key
-    ServerAliveInterval 60
-    ServerAliveCountMax 3
-EOF
-chmod 600 /home/${PI_USER}/.ssh/config
-chown ${PI_USER}:${PI_USER} /home/${PI_USER}/.ssh/config
-
-log_step "complete"
-echo "=== First-run hardening complete: \$(date) ===" | tee -a "\$BOOTLOG"
-echo "COMPLETE [\$(date)]" > "\$STATUSFILE"
-echo "NOTE: Generate the node SSH key manually after first login:"
-echo "  ssh-keygen -t ed25519 -C 'rp-node01-access' -f ~/.ssh/rp_node_key"
-
-# FIX 5: Use direct kernel reboot — systemd bus not available at this stage
-rm -f "\$0"
-/sbin/reboot -f
-FIRSTRUN
-
-chmod +x "$FIRSTRUN_SCRIPT"
+# (nothing to do here — boot partition injection handles SSH enablement)
 
 # =============================================================================
 # STEP 6: Confirmation summary
@@ -440,14 +232,15 @@ printf "║  💾 %-12s  %-30s║\n" "Target"       "$SD_DEVICE"
 printf "║  📦 %-12s  %-30s║\n" "Device"       "$SD_NAME"
 printf "║  📏 %-12s  %-30s║\n" "Size"         "$SD_SIZE"
 echo "╠══════════════════════════════════════════════════╣"
-echo "║  First-run script will:                         ║"
-echo "║    ✓ Update all packages                        ║"
-echo "║    ✓ Install ufw, fail2ban, curl, wget          ║"
-echo "║    ✓ Inject your SSH public key                 ║"
-echo "║    ✓ Disable password SSH auth                  ║"
-echo "║    ✓ Configure UFW + fail2ban                   ║"
-echo "║    ✓ Install watchdog cron (every 15 min)       ║"
-echo "║    ✓ Pre-configure SSH client for node          ║"
+echo "║  Boot configuration will:                       ║"
+echo "║    ✓ Create user ${PI_USER} (bypasses wizard)         ║"
+echo "║    ✓ Enable SSH on first boot                   ║"
+echo "║                                                 ║"
+echo "║  After boot, the agent will handle:             ║"
+echo "║    → System update + package install            ║"
+echo "║    → SSH key injection + hardening              ║"
+echo "║    → UFW + fail2ban                             ║"
+echo "║    → Watchdog cron + SSH client config          ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 warn "THIS WILL ERASE ALL DATA ON $SD_DEVICE ($SD_NAME)"
@@ -594,11 +387,9 @@ if [ -z "$BOOT_MOUNT_PATH" ] || [ ! -d "$BOOT_MOUNT_PATH" ]; then
     warn "  4. Copy firstrun.sh: cp $FIRSTRUN_SCRIPT /Volumes/bootfs/firstrun.sh"
     warn "  5. Add to cmdline.txt: append 'systemd.run=/boot/firmware/firstrun.sh' to the end of the single line"
 else
-    info "Injecting configuration into $BOOT_MOUNT_PATH..."
+    info "Injecting minimal boot configuration into $BOOT_MOUNT_PATH..."
 
-    # 1. userconf.txt — bypasses the interactive first-boot wizard
-    # openssl passwd -6 requires OpenSSL (not LibreSSL which ships with macOS)
-    # Try openssl first, fall back to Python if needed
+    # 1. userconf.txt — creates user and bypasses interactive first-boot wizard
     if openssl passwd -6 "test" &>/dev/null 2>&1; then
         HASHED_PASSWORD=$(openssl passwd -6 "$PI_PASSWORD")
     else
@@ -608,71 +399,31 @@ else
         error "Could not generate password hash. Install openssl: brew install openssl"
     fi
     echo "${PI_USER}:${HASHED_PASSWORD}" | sudo tee "$BOOT_MOUNT_PATH/userconf.txt" > /dev/null
-    success "userconf.txt written (bypasses setup wizard)"
+    success "userconf.txt written — user ${PI_USER} will be created on first boot"
 
     # 2. ssh — empty file that enables SSH on first boot
     sudo touch "$BOOT_MOUNT_PATH/ssh"
-    success "ssh file created (enables SSH)"
+    success "ssh file created — SSH will be enabled on first boot"
 
-    # 3. firstrun.sh — our hardening script
-    # Copy to both /boot/firmware/ path (Bookworm) and root (older firmware fallback)
-    sudo cp "$FIRSTRUN_SCRIPT" "$BOOT_MOUNT_PATH/firstrun.sh"
-    sudo chmod +x "$BOOT_MOUNT_PATH/firstrun.sh"
-    # Also copy to firmware subdirectory if it exists on the boot partition
-    if [ -d "$BOOT_MOUNT_PATH/firmware" ]; then
-        sudo cp "$FIRSTRUN_SCRIPT" "$BOOT_MOUNT_PATH/firmware/firstrun.sh"
-        sudo chmod +x "$BOOT_MOUNT_PATH/firmware/firstrun.sh"
-    fi
-    success "firstrun.sh injected"
-
-    # 4. cmdline.txt — add systemd.run to execute firstrun.sh on boot
-    # Try /boot/firmware first (Bookworm), fall back to /boot (older firmware)
-    CMDLINE="$BOOT_MOUNT_PATH/cmdline.txt"
-    if [ -f "$CMDLINE" ]; then
-        # Back up original cmdline.txt
-        sudo cp "$CMDLINE" "$CMDLINE.bak"
-
-        if ! grep -q "firstrun.sh" "$CMDLINE"; then
-            CURRENT=$(cat "$CMDLINE" | tr -d '\n')
-            # Detect which path the Pi will use at runtime
-            # If /boot/firmware exists on the Pi, use that path; otherwise /boot
-            # We inject both as a comment and use /boot/firmware (Bookworm default)
-            NEW_CMDLINE="${CURRENT} systemd.run=/boot/firmware/firstrun.sh"
-            echo "$NEW_CMDLINE" | sudo tee "$CMDLINE" > /dev/null
-
-            # Validate — confirm the file still has rootwait and our addition
-            if grep -q "rootwait" "$CMDLINE" && grep -q "firstrun.sh" "$CMDLINE"; then
-                success "cmdline.txt updated and validated (/boot/firmware/firstrun.sh)"
-            else
-                warn "cmdline.txt validation failed — restoring backup"
-                sudo cp "$CMDLINE.bak" "$CMDLINE"
-                warn "firstrun.sh will NOT run automatically on first boot"
-                warn "Pi will still boot correctly — hardening must be done manually"
-            fi
-        else
-            info "cmdline.txt already references firstrun.sh — skipping"
-        fi
-    else
-        warn "cmdline.txt not found — firstrun.sh may not execute automatically"
-    fi
-
-    success "All boot configuration files injected"
+    # That's it. No firstrun.sh, no cmdline.txt modification.
+    # All hardening is done by the agent over SSH after the Pi boots.
+    success "Boot configuration complete — Pi will boot with SSH enabled"
 fi
 
 # =============================================================================
-# STEP 9: Generate setup-mac-ssh.sh and run post-flash flow
+# STEP 9: Generate setup-mac-ssh.sh and harden-pi.sh, then run post-flash flow
 # =============================================================================
-rm -f "$FIRSTRUN_SCRIPT"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Generate setup-mac-ssh.sh from template
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE="$SCRIPT_DIR/setup-mac-ssh.sh.template"
 SETUP_SCRIPT="$SCRIPT_DIR/setup-mac-ssh.sh"
 
 if [ -f "$TEMPLATE" ]; then
     info "Generating setup-mac-ssh.sh from template..."
     sed \
-        -e "s|{{HOSTNAME}}|${HOSTNAME}|g" \
+        -e "s|{{HOSTNAME}}|${PI_HOSTNAME}|g" \
         -e "s|{{PI_HOST}}|${PI_HOST}|g" \
         -e "s|{{PI_USER}}|${PI_USER}|g" \
         -e "s|{{JUMPHOST_KEY}}|${JUMPHOST_KEY}|g" \
@@ -682,7 +433,31 @@ if [ -f "$TEMPLATE" ]; then
     chmod +x "$SETUP_SCRIPT"
     success "Generated: $SETUP_SCRIPT"
 else
-    warn "Template not found — skipping setup-mac-ssh.sh generation"
+    warn "setup-mac-ssh.sh.template not found — skipping"
+fi
+
+# Generate harden-pi.sh from template
+HARDEN_TEMPLATE="$SCRIPT_DIR/harden-pi.sh.template"
+HARDEN_SCRIPT="$SCRIPT_DIR/harden-pi.sh"
+
+if [ -f "$HARDEN_TEMPLATE" ]; then
+    info "Generating harden-pi.sh from template..."
+    # MAC_PUBKEY may contain special chars — write to temp file and use @file substitution
+    PUBKEY_ESCAPED=$(echo "$MAC_PUBKEY" | sed 's|[&/\]|\\&|g')
+    sed \
+        -e "s|{{HOSTNAME}}|${PI_HOSTNAME}|g" \
+        -e "s|{{PI_HOST}}|${PI_HOST}|g" \
+        -e "s|{{PI_USER}}|${PI_USER}|g" \
+        -e "s|{{NODE_HOSTNAME}}|${NODE_HOSTNAME}|g" \
+        -e "s|{{NODE_HOST}}|${NODE_HOST}|g" \
+        -e "s|{{TIMEZONE}}|${TIMEZONE}|g" \
+        -e "s|{{WEBHOOK_URL}}|${WEBHOOK_URL}|g" \
+        -e "s|{{MAC_PUBKEY}}|${PUBKEY_ESCAPED}|g" \
+        "$HARDEN_TEMPLATE" > "$HARDEN_SCRIPT"
+    chmod +x "$HARDEN_SCRIPT"
+    success "Generated: $HARDEN_SCRIPT"
+else
+    warn "harden-pi.sh.template not found — skipping"
 fi
 
 # Eject SD card
@@ -702,30 +477,26 @@ echo "  2️⃣  Insert it into the Raspberry Pi 2 (underside slot)"
 echo "  3️⃣  Connect an Ethernet cable from the Pi to your router"
 echo "  4️⃣  Connect the Pi to power (Micro USB)"
 echo ""
-echo "  The Pi will boot and run the hardening script automatically."
-echo "  This takes ~3 minutes on first boot."
+echo "  The Pi will boot with SSH enabled — no first-run script."
+echo "  Boot time is ~60-90 seconds."
 echo ""
 echo "╔══════════════════════════════════════════════════╗"
 echo "║  🔍 How to validate the Pi is working            ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 echo "  Option A — Check the LEDs:"
-echo "    Red LED solid   = powered on"
+echo "    Red LED solid    = powered on"
 echo "    Green LED blinks = SD card being read (booting)"
 echo "    Green LED off    = not reading SD card (boot failure)"
 echo ""
-echo "  Option B — Check boot partition files from your Mac:"
-echo "    After ~3 min, re-insert the SD card and check:"
-echo "    cat /Volumes/bootfs/firstrun-status.txt"
-echo "    cat /Volumes/bootfs/firstrun-debug.log"
-echo "    These files show exactly what ran and where it stopped."
-echo ""
-echo "  Option C — Ping the Pi:"
+echo "  Option B — Ping the Pi:"
 echo "    ping -c 3 ${PI_HOST}"
-echo "    (Only works after firstrun.sh completes and Pi reboots)"
 echo ""
-echo "  Option D — SSH in:"
-echo "    ssh -i ${JUMPHOST_KEY} ${PI_USER}@${PI_HOST}"
+echo "  Option C — SSH in (password login, key not yet set up):"
+echo "    ssh ${PI_USER}@${PI_HOST}"
+echo ""
+echo "  Once the Pi responds, run setup-mac-ssh.sh to configure SSH,"
+echo "  then the agent will run harden-pi.sh to complete hardening."
 echo ""
 echo "  Once the Pi is confirmed working, run:"
 echo "    bash ${SETUP_SCRIPT:-kiro-rocketpool-guide/scripts/setup-mac-ssh.sh}"
