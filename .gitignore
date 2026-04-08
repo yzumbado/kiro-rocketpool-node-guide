@@ -26,3 +26,7 @@ kiro-rocketpool-guide/scripts/harden-pi.sh
 docs.rocketpool.net/
 rocketpool_node_setup_combined.md
 sources.list
+
+# Kiro for Teams — separate project, not part of this repo
+# Move kiro-for-teams/ to its own git repository when ready
+kiro-for-teams/

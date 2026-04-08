@@ -62,4 +62,4 @@ For phase progress see `session-state.md`.
 
 | Date | Summary |
 |---|---|
-| Apr 2026 | Major architecture refactor: removed firstrun.sh from flash process. Flash now minimal (userconf.txt + ssh file only). All hardening moved to harden-pi.sh which runs over SSH after boot. Created SECURITY-AUDIT.md, kiro-dev.md, TASKS.md. Fixed 12 backlog issues from code review. Established three-tier task tracking system. |
+| Apr 2026 | Major architecture refactor: removed firstrun.sh from flash process. Flash now minimal (userconf.txt + ssh file only). All hardening moved to harden-pi.sh which runs over SSH after boot. Created SECURITY-AUDIT.md, kiro-dev.md, TASKS.md. Fixed 12 backlog issues from code review. Established three-tier task tracking system. Created kiro-for-teams/HANDOFF.md as seed for new project. |
