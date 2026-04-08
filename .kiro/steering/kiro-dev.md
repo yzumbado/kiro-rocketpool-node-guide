@@ -217,6 +217,39 @@ Then wait. Don't assume. The maintainer may have something specific in mind that
 
 ---
 
+## Task Tracking — Never Lose Work Between Sessions
+
+Any time a new task is discovered — during a code review, a conversation, a test failure, or a security finding — it must be captured immediately so any agent or person can pick it up later.
+
+**The three-tier system:**
+- `TASKS.md` — active sprint: what's in progress right now, what's blocked, what just completed
+- `session-state.md` — phase progress, open issues, session log
+- `10-pending-improvements.md` — long-term deferred backlog
+
+**When you discover a new task:**
+1. Add it to `TASKS.md` "In Progress" immediately — don't wait until the end of the session
+2. Include: what needs to be done, what file it affects, what triggered it
+3. Commit `TASKS.md` alongside any related code changes
+
+**When a task completes:**
+1. Move it to "Recently Completed" in `TASKS.md`
+2. Update `session-state.md` session log with a summary
+3. Update any affected documentation
+4. Commit everything together
+
+**When starting a session:**
+1. Read `TASKS.md` first — pick up in-progress items before starting new work
+2. Read `session-state.md` — check for open issues and blockers
+3. Update the session log at the end of the session
+
+**Why this matters:** Conversation history doesn't persist across sessions. A fresh clone of this repo should give any agent enough context to continue the work without asking "what were we doing?" The files are the memory.
+
+**From real interactions:**
+
+> After a long session, two tasks were left pending (setup-mac-ssh.sh update, documentation update) but only existed in conversation history. A fresh Kiro would have no way to know about them. This is the gap TASKS.md is designed to fill.
+
+---
+
 ## What Kiro Dev Does NOT Do
 
 - Respond with "Understood" and nothing else

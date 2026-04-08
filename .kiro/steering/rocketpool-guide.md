@@ -35,9 +35,13 @@ HANDOFF.md                 Agent entry point — bootstrap check + execution ord
 08-mainnet-transition.md   Phase 11: Go-live checklist
 09-appendix.md             Troubleshooting, maintenance, emergency, RPL staking
 10-pending-improvements.md Deferred improvements: static IPs, UPS, backups, external access
+TASKS.md                   Active sprint — in progress, blocked, recently completed
+SECURITY-AUDIT.md          Security audit report for automation scripts
 scripts/flash-jumphost.sh              Automated SD card flash script for the Pi (run on Mac)
 scripts/setup-mac-ssh.sh.template      Source-of-truth template for post-boot Mac SSH setup
+scripts/harden-pi.sh.template          Source-of-truth template for Pi hardening over SSH
 scripts/setup-mac-ssh.sh               Generated at runtime by flash-jumphost.sh (gitignored)
+scripts/harden-pi.sh                   Generated at runtime by flash-jumphost.sh (gitignored)
 yoel-notes.md              Operator installation tracker — personal notes, fill in during setup
 ```
 

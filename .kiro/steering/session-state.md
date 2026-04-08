@@ -75,7 +75,8 @@ Update status as each phase completes. Kiro uses this to know where to continue.
 
 | Date | Phase | Issue | Status |
 |---|---|---|---|
-| | | | |
+| Apr 2026 | 0b | `setup-mac-ssh.sh.template` still polls for `firstrun.log` which no longer exists (M3 from security audit). Needs: remove stale poll, add explicit human approval flow before running `harden-pi.sh` | ↻ in progress — see TASKS.md T1 |
+| Apr 2026 | 0b | Project docs partially outdated — some files still reference old firstrun.sh approach | ↻ in progress — see TASKS.md T2 |
 
 ---
 
@@ -85,4 +86,4 @@ Update status as each phase completes. Kiro uses this to know where to continue.
 
 | Date | Summary |
 |---|---|
-| | |
+| Apr 2026 | Major architecture refactor: removed firstrun.sh from flash process. Flash now minimal (userconf.txt + ssh file only). All hardening moved to harden-pi.sh which runs over SSH after boot. Created security audit (SECURITY-AUDIT.md). Created kiro-dev.md steering file for maintainer sessions. Created TASKS.md for short-term task tracking. Fixed 12 backlog issues from code review. |
