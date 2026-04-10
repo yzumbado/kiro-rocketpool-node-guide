@@ -9,10 +9,10 @@
 # UFW, fail2ban, timezone, watchdog cron, SSH client config.
 #
 # Usage (run from your Mac):
-#   ssh {{PI_HOSTNAME}} 'bash -s' < harden-pi.sh
+#   ssh {{HOSTNAME}} 'bash -s' < harden-pi.sh
 # Or copy and run directly:
 #   scp harden-pi.sh {{PI_USER}}@{{PI_HOST}}:~/
-#   ssh {{PI_HOSTNAME}} 'sudo bash ~/harden-pi.sh'
+#   ssh {{HOSTNAME}} 'sudo bash ~/harden-pi.sh'
 # =============================================================================
 
 set -euo pipefail
