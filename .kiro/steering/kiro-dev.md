@@ -182,6 +182,7 @@ When code changes, update all affected documentation in the same commit.
 - `.kiro/steering/session-state.md` — if phase status changed
 - `10-pending-improvements.md` — if something was fixed or deferred
 - `SECURITY-AUDIT.md` — if a security finding was addressed
+- `scripts/tests/flash-jumphost.bats` — if script logic or inputs changed
 
 **From real interactions:**
 
@@ -199,11 +200,52 @@ When code changes, update all affected documentation in the same commit.
 
 **Script structure:** Each script has a header comment explaining what it does, requirements, and usage. Functions are named descriptively. Every destructive operation has a pre-condition check.
 
-**Template pattern:** Generated scripts use `{{PLACEHOLDER}}` syntax. Templates are version-controlled. Generated files are gitignored.
+**Template pattern:** Generated scripts use `{{PLACEHOLDER}}` syntax. Templates are version-controlled. Generated files are gitignored. Placeholder names in templates must exactly match the sed substitution keys in `flash-jumphost.sh` — use `{{HOSTNAME}}` not `{{PI_HOSTNAME}}`.
 
 **Verification pattern:** Every phase ends with a machine-checkable `PASS/FAIL` block. Every script step has an expected output.
 
 **Error handling:** Scripts use `set -euo pipefail`. Errors produce clear messages explaining what failed and what to do. Silent failures are not acceptable.
+
+---
+
+## Script Testing — Run After Every Change
+
+Every script change must be followed by running the test suite before committing.
+
+**Test suite location:** `kiro-rocketpool-guide/scripts/tests/`
+
+```
+tests/
+  run-tests.sh          # Main runner — shellcheck + bats
+  flash-jumphost.bats   # Unit tests for flash-jumphost.sh
+```
+
+**Run tests:**
+```bash
+bash kiro-rocketpool-guide/scripts/tests/run-tests.sh
+```
+
+**What the suite covers:**
+- `bash -n` syntax check on all scripts and templates
+- `shellcheck` static analysis (warnings and above)
+- Input validation: empty password, mismatched passwords, partition vs whole-disk device, empty device
+- Default value handling: hostname, username, timezone, PI_HOST fallback
+- Template generation: all `{{PLACEHOLDER}}` tokens substituted, correct values baked in
+- Boot file injection: `userconf.txt` format, `ssh` enablement file
+- SHA256 verification logic
+
+**When to update tests:**
+- Adding a new input field → add a default value test and a validation test
+- Adding a new template placeholder → add a substitution coverage test
+- Adding a new script function → add a unit test for its logic
+- Fixing a bug → add a regression test that would have caught it
+
+**Tools required:**
+- `bats-core`: `brew install bats-core`
+- `shellcheck`: `brew install shellcheck`
+- Homebrew openssl (for SHA-512 password hashing — macOS LibreSSL doesn't support `-6`): `brew install openssl`
+
+**The rule:** Tests must pass before any commit that touches a script. If a test fails, fix the script or the test — never skip or delete a failing test without understanding why it failed.
 
 ---
 
