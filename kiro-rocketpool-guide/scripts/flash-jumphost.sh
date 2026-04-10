@@ -77,8 +77,8 @@ echo ""
 DEFAULT_HOSTNAME="pi-jumphost"
 ask "Pi hostname [default: ${DEFAULT_HOSTNAME}]:"
 read -r INPUT_HOSTNAME
-HOSTNAME="${INPUT_HOSTNAME:-$DEFAULT_HOSTNAME}"
-echo "  → $HOSTNAME"
+PI_HOSTNAME="${INPUT_HOSTNAME:-$DEFAULT_HOSTNAME}"
+echo "  → $PI_HOSTNAME"
 
 # --- Username ---
 DEFAULT_USERNAME="piop"
@@ -115,7 +115,7 @@ info "Static IPs are optional. Press Enter to skip and use .local hostnames inst
 ask "Pi static IP for DHCP reservation (or press Enter to skip):"
 read -r INPUT_PI_IP
 PI_IP="${INPUT_PI_IP:-}"
-echo "  → ${PI_IP:-[not set — using ${HOSTNAME}.local]}"
+echo "  → ${PI_IP:-[not set — using ${PI_HOSTNAME}.local]}"
 
 # --- Node hostname ---
 DEFAULT_NODE_HOSTNAME="rp-node01"
@@ -130,7 +130,7 @@ NODE_IP="${INPUT_NODE_IP:-}"
 echo "  → ${NODE_IP:-[not set — using ${NODE_HOSTNAME}.local]}"
 
 # Determine hostnames to use in SSH config
-PI_HOST="${PI_IP:-${HOSTNAME}.local}"
+PI_HOST="${PI_IP:-${PI_HOSTNAME}.local}"
 NODE_HOST="${NODE_IP:-${NODE_HOSTNAME}.local}"
 
 # --- Discord webhook (optional) ---
@@ -144,12 +144,12 @@ echo "  → ${WEBHOOK_URL:-[not set]}"
 echo ""
 info "Checking SSH keys..."
 
-JUMPHOST_KEY="$HOME/.ssh/id_ed25519_${HOSTNAME}"
+JUMPHOST_KEY="$HOME/.ssh/id_ed25519_${PI_HOSTNAME}"
 JUMPHOST_PUB="${JUMPHOST_KEY}.pub"
 
 if [ ! -f "$JUMPHOST_PUB" ]; then
     info "Generating new Ed25519 key pair for Mac → Pi access..."
-    ssh-keygen -t ed25519 -C "mac-to-${HOSTNAME}" -f "$JUMPHOST_KEY" -N ""
+    ssh-keygen -t ed25519 -C "mac-to-${PI_HOSTNAME}" -f "$JUMPHOST_KEY" -N ""
     success "Key generated: ${JUMPHOST_PUB}"
 else
     success "Found existing key: ${JUMPHOST_PUB}"
@@ -158,7 +158,9 @@ fi
 MAC_PUBKEY=$(cat "$JUMPHOST_PUB")
 if [ -z "$MAC_PUBKEY" ]; then
     error "SSH public key is empty — cannot continue. Check $JUMPHOST_PUB"
-fi# =============================================================================
+fi
+
+# =============================================================================
 # STEP 4: Detect SD card
 # =============================================================================
 echo ""
@@ -220,12 +222,12 @@ echo ""
 echo "╔══════════════════════════════════════════════════╗"
 echo "║           CONFIGURATION SUMMARY                 ║"
 echo "╠══════════════════════════════════════════════════╣"
-printf "║  🖥️  %-12s  %-30s║\n" "Pi hostname"  "$HOSTNAME"
+printf "║  🖥️  %-12s  %-30s║\n" "Pi hostname"  "$PI_HOSTNAME"
 printf "║  👤 %-12s  %-30s║\n" "Pi username"  "$PI_USER"
 printf "║  🌍 %-12s  %-30s║\n" "Timezone"     "$TIMEZONE"
-printf "║  🌐 %-12s  %-30s║\n" "Pi address"   "${PI_IP:-${HOSTNAME}.local}"
+printf "║  🌐 %-12s  %-30s║\n" "Pi address"   "${PI_IP:-${PI_HOSTNAME}.local}"
 printf "║  🌐 %-12s  %-30s║\n" "Node address" "${NODE_IP:-${NODE_HOSTNAME}.local}"
-printf "║  🔑 %-12s  %-30s║\n" "SSH key"      "~/.ssh/id_ed25519_${HOSTNAME}"
+printf "║  🔑 %-12s  %-30s║\n" "SSH key"      "$HOME/.ssh/id_ed25519_${PI_HOSTNAME}"
 printf "║  🔔 %-12s  %-30s║\n" "Webhook"      "${WEBHOOK_URL:-[not set]}"
 echo "╠══════════════════════════════════════════════════╣"
 printf "║  💾 %-12s  %-30s║\n" "Target"       "$SD_DEVICE"
@@ -358,7 +360,7 @@ diskutil mountDisk "$SD_DEVICE" || true
 
 # Poll for mount point instead of fixed sleep
 BOOT_MOUNT_PATH=""
-for i in $(seq 1 15); do
+for _i in $(seq 1 15); do
     for path in "/Volumes/bootfs" "/Volumes/boot" "/Volumes/BOOT"; do
         if [ -d "$path" ]; then
             BOOT_MOUNT_PATH="$path"
@@ -390,13 +392,13 @@ else
     info "Injecting minimal boot configuration into $BOOT_MOUNT_PATH..."
 
     # 1. userconf.txt — creates user and bypasses interactive first-boot wizard
-    if openssl passwd -6 "test" &>/dev/null 2>&1; then
+    # Try Homebrew openssl first (macOS LibreSSL doesn't support -6)
+    if /opt/homebrew/opt/openssl/bin/openssl passwd -6 "test" &>/dev/null 2>&1; then
+        HASHED_PASSWORD=$(/opt/homebrew/opt/openssl/bin/openssl passwd -6 "$PI_PASSWORD")
+    elif openssl passwd -6 "test" &>/dev/null 2>&1; then
         HASHED_PASSWORD=$(openssl passwd -6 "$PI_PASSWORD")
     else
-        HASHED_PASSWORD=$(python3 -c "import crypt; print(crypt.crypt('$PI_PASSWORD', crypt.mksalt(crypt.METHOD_SHA512)))" 2>/dev/null)
-    fi
-    if [ -z "$HASHED_PASSWORD" ]; then
-        error "Could not generate password hash. Install openssl: brew install openssl"
+        error "Could not generate SHA-512 password hash. Install openssl: brew install openssl"
     fi
     echo "${PI_USER}:${HASHED_PASSWORD}" | sudo tee "$BOOT_MOUNT_PATH/userconf.txt" > /dev/null
     success "userconf.txt written — user ${PI_USER} will be created on first boot"
